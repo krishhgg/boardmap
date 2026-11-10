@@ -5,7 +5,31 @@ const dnp = (value) =>
   /^(?:1|yes|true|dnp|dnf|do[ _-]?not[ _-]?(?:populate|place)|not[ _-]?fitted)$/i.test(
     String(value ?? "").trim(),
   );
-export function propertyPriority(change) {
+// Verified legacy library features migrated a custom DNP field into BOM metadata.
+// Unknown footprints stay conservative. BOM exclusion never defines DNP state.
+const legacyFeatures = new Set([
+  "hackrf:GSG-HOLE126MIL-COPPER",
+  "hackrf:GSG-TESTPOINT-50MIL",
+  "gsg-modules:0603-JUMPER",
+]);
+function legacyAssemblyMigration(part) {
+  const a = part?.before,
+    b = part?.after;
+  if (!a || !b || a.footprint !== b.footprint || !legacyFeatures.has(a.footprint))
+    return false;
+  const attributesAre = (p, flags) =>
+    p.attributes.length === flags.length &&
+    flags.every((flag) => p.attributes.includes(flag));
+  const direction = (old, fresh) =>
+    attributesAre(old, ["exclude_from_pos_files"]) &&
+    attributesAre(fresh, ["exclude_from_bom", "exclude_from_pos_files"]) &&
+    old.fields.DNP === "DNP" &&
+    !Object.hasOwn(old.fields, "exclude_from_bom") &&
+    (fresh.fields.DNP === "" || !Object.hasOwn(fresh.fields, "DNP")) &&
+    fresh.fields.exclude_from_bom === "";
+  return direction(a, b) || direction(b, a);
+}
+export function propertyPriority(change, part) {
   if (change.field === "attributes")
     return change.before.includes("dnp") !== change.after.includes("dnp")
       ? "population"
@@ -18,7 +42,8 @@ export function propertyPriority(change) {
   for (const key of keys)
     if (
       ["dnp", "donotpopulate", "donotplace"].includes(normalizedKey(key)) &&
-      dnp(change.before[key]) !== dnp(change.after[key])
+      dnp(change.before[key]) !== dnp(change.after[key]) &&
+      !(key === "DNP" && legacyAssemblyMigration(part))
     )
       return "population";
   for (const key of keys) {
@@ -42,7 +67,7 @@ export const orderedChanges = (part) =>
     const rank = (change) =>
       fieldOrder.includes(change.field)
         ? fieldOrder.indexOf(change.field)
-        : propertyPriority(change)
+        : propertyPriority(change, part)
           ? 4
           : 5;
     return rank(a) - rank(b);
@@ -61,13 +86,30 @@ export function changeGroup(part) {
   if (part.status === "unchanged") return "Unchanged";
   if (!(part.before?.pads?.length || part.after?.pads?.length || part.pads.length))
     return "Metadata";
+  if (
+    ["added", "removed"].includes(part.status) &&
+    isFiducial(part.after ?? part.before)
+  )
+    return "Metadata";
   if (part.status === "removed") return "Removed";
   if (part.status === "added") return "Added";
   return part.changes.some(
-    (c) => fieldOrder.includes(c.field) || propertyPriority(c),
+    (c) => fieldOrder.includes(c.field) || propertyPriority(c, part),
   )
     ? "Electrical"
     : "Metadata";
+}
+function isFiducial(p) {
+  return (
+    p &&
+    /(?:^|[:_-])(?:fiducial|mark)(?:[_-]|\d|$)/i.test(p.footprint ?? "") &&
+    p.attributes?.includes("board_only") &&
+    p.attributes.includes("exclude_from_bom") &&
+    p.pads.length > 0 &&
+    p.pads.every((pad) =>
+      !pad.number && !pad.net && pad.type === "smd" && pad.shape === "circle",
+    )
+  );
 }
 export const isElectrical = (part) =>
   ["Electrical", "Removed", "Added"].includes(changeGroup(part));

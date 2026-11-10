@@ -12,16 +12,18 @@ Actual Chromium captures of the pinned real-board comparisons. Each run starts a
 | `hackrf/touch-reach.png`, `corne/touch-reach.png` | 390×844  | First-tap reach preview and explicit inspect action                      |
 | `hackrf/touch-diff.png`, `corne/touch-diff.png`   | 390×844  | Inspector opened through the touch action                                |
 
+`header-1024.png` checks the visible electrical headline at laptop width. `keyboard-focus.png` shows roving keyboard selection and reach. HackRF's `u17-inspector.png` places the replacement context above its 51 changed pin rows.
+
 `sheet.png` and `board.png` capture drill-in and footprint-center views during the browser regression. `mobile.png` is the ordinary browser's mobile-width state. The `touch-*` captures use a separate context with `hasTouch: true` and `isMobile: true`.
 
 The header's electrical total includes high-priority modifications plus added and removed parts with pads. Raw statuses remain intact. Zero-pad artwork is grouped as metadata, so the grouped removed/added counts can differ from raw status counts.
 
 | Comparison   | Head parts | In view, including removed | Changed | Electrical modifications | Removed group | Added group | Metadata group | Header electrical total |
 | ------------ | ---------: | -------------------------: | ------: | -----------------------: | ------------: | ----------: | -------------: | ----------------------: |
-| HackRF       |        437 |                        469 |     390 |                      131 |            31 |          11 |            217 |                     173 |
+| HackRF       |        437 |                        469 |     390 |                       73 |            29 |           9 |            279 |                     111 |
 | Corne cherry |        180 |                        184 |      18 |                        6 |             2 |           4 |              6 |                      12 |
 
-HackRF's first electrical rows are U17 with 51 rewired pins, U19 with 19 and U23 with 15. The numbers come from changed numbered pin-net assignments across both revisions. Population transitions and both-present part identifier replacements also qualify for this tier. DNP and identifier rules have focused unit assertions.
+HackRF's first electrical rows are U17 with 51 rewired pins, U19 with 19 and U23 with 15. The numbers come from changed numbered pin-net assignments across both revisions. Population transitions and both-present part identifier replacements also qualify for this tier. Verified legacy assembly-metadata migrations and explicitly flagged unconnected fiducials are quiet metadata; raw changes and reach remain unchanged. See [assembly priority](../../assembly-priority.md). DNP and identifier rules have focused unit assertions.
 
 ## Reproduce
 
@@ -44,7 +46,7 @@ npm run test:e2e -- --repo "$CORNE_CACHE" \
 node scripts/capture-demo.mjs "$CORNE_CACHE" --gif
 ```
 
-All 24 existing engine tests and six presentation tests passed. Both synthetic browser cases and both real-board cases passed without browser errors. The browser asserts the actual JetBrains Mono platform font through Chromium CDP, full reference-label bounds, computed sidebar classifications, rewired-pin priority, full neighbor highlights, curve counts, changed-only pad colors, the drill disclosure, keyboard focus retention, inspector reach-control updates, changed mechanical-pad highlighting, long property names, open sheet-rename panels, overflow at 720 / 800 / 390px, search and scope filtering, and real touch preview before inspection.
+All 24 existing engine tests and nine presentation tests passed. Both synthetic browser cases and both real-board cases passed without browser errors. The browser asserts the actual JetBrains Mono platform font through Chromium CDP, full reference-label bounds, computed sidebar classifications, rewired-pin priority, full neighbor highlights, curve counts, changed-only pad colors, the drill disclosure, keyboard focus retention, inspector reach-control updates, changed mechanical-pad highlighting, long property names, open sheet-rename panels, overflow at 720 / 800 / 390px, search and scope filtering, and real touch preview before inspection.
 
 The synthetic drill assertion opens the geometry disclosure, checks pad 2's 0.8 to 1.2 change, and confirms no unchanged pad 1 geometry row. The ZD1 demo separately verifies Pin 2 changes from GND to VBUS.
 
