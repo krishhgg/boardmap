@@ -18,7 +18,7 @@ Actual Chromium captures from pinned HackRF and Corne git objects. The UI reads 
 | `corne/touch-sheet.png` | 390 × 844 | Scrolled sheet with readable references and larger touch targets. |
 | `corne/touch-sheet-preview.png` | 390 × 844 | The readout stays on screen without covering the original tap point. |
 | `corne/readout-1280.png`, `corne/readout-1024.png` | 1280 × 800, 1024 × 720 | Leading rail counts and the complete qualifier text stay outside the remaining-net scroller. |
-| `corne/board-neighbor-return.png` | 1440 × 900 | Both Corne boards loaded unchanged. Following a named neighbor from the sidebar chooses its board; Back returns to that part instead of the board chooser. |
+| `corne/board-neighbor-return.png` | 1440 × 1000 | Both Corne boards loaded unchanged. Following a named neighbor from the sidebar chooses its board; Back returns to that part instead of the board chooser. |
 
 The refreshed eight-second hero and four frames are in `../instrument/`. Earlier capture directories record prior revisions and their original counts.
 
