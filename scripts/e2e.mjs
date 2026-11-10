@@ -54,7 +54,7 @@ const detailCaptures = new Set([
   "board-neighbor-return",
 ]);
 const continuityCaptures = new Set([
-  "returned-part", "escape-return", "board-neighbor-return", "readable-sheet", "readable-root", "touch-return", "touch-root",
+  "returned-part", "escape-return", "board-neighbor-return", "board-list-return", "touch-board-list-return", "tablet-return", "readable-sheet", "readable-root", "touch-return", "touch-root",
 ]);
 const shouldCapture = (name) =>
   out && (values.continuity
@@ -75,8 +75,7 @@ const previewSettled = (id) => page.waitForFunction((expected) => {
   return expected ? tile?.dataset.id === expected : !tile;
 }, id);
 const hoverPart = async (node) => {
-  const box = await node.boundingBox();
-  await node.hover({ position: { x: box.width / 4, y: box.height / 4 } });
+  await node.hover({ position: { x: 1, y: 1 } });
   await node.hover();
   await previewSettled(await node.getAttribute("data-id"));
 };
@@ -883,6 +882,14 @@ try {
   if (populatedBoards.length > 1) {
     const choices = page.locator(".board-chooser button");
     assert.equal(await choices.count(), populatedBoards.length);
+    await page.locator(`.part-row[data-id=${JSON.stringify(candidate.id)}]`).click();
+    await page.locator(".close-diff").click();
+    await page.waitForTimeout(500);
+    assert.equal(await choices.count(), 0, "list inspection chooses its board for return");
+    await assertReturnedPart(page, candidate.id);
+    assert.ok(await page.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`).isVisible());
+    await capture("board-list-return");
+    await page.locator("#breadcrumbs button").first().click();
     await page.locator(`.part-row[data-id=${JSON.stringify(candidate.id)}]`).press("Enter");
     await page.locator(".reach-details > summary").click();
     const neighbor = page.locator(".reach-part").first();
@@ -1180,6 +1187,20 @@ try {
     "outside touch dismisses preview",
   );
   await touchPage.locator("#board-tab").tap();
+  if (populatedBoards.length > 1) {
+    await touchPage.locator("#toggle-changes").tap();
+    await touchPage.locator("#only-changed").uncheck();
+    const row = touchPage.locator(`.part-row[data-id=${JSON.stringify(candidate.id)}]`);
+    await row.tap();
+    await row.tap();
+    await touchPage.locator(".close-diff").tap();
+    await touchPage.waitForTimeout(500);
+    assert.equal(await touchPage.locator(".board-chooser button").count(), 0,
+      "phone list inspection chooses the originating board");
+    await assertReturnedPart(touchPage, candidate.id);
+    assert.equal(await touchPage.evaluate(() => document.activeElement.dataset.id), candidate.id);
+    await touchCapture("touch-board-list-return");
+  }
   await touchPage.locator("#map-tab").tap();
   await tapSamePoint();
   await touchPage.keyboard.press("Escape");
@@ -1253,6 +1274,33 @@ try {
     }
   }
   await touch.close();
+  for (const [width, hasTouch] of [[701, false], [720, false], [768, false], [900, false], [768, true]]) {
+    const tablet = await browser.newContext({
+      viewport: { width, height: hasTouch ? 1024 : 900 },
+      hasTouch,
+      isMobile: hasTouch,
+    });
+    const surface = await tablet.newPage();
+    surface.on("pageerror", (e) => errors.push(e.message));
+    await surface.goto(`http://127.0.0.1:${server.address().port}`);
+    const subject = surface.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`);
+    await subject.waitFor();
+    if (hasTouch) {
+      await subject.tap();
+      await subject.tap();
+      await surface.locator(".close-diff").tap();
+    } else {
+      await subject.click();
+      await surface.locator(".close-diff").click();
+    }
+    await surface.waitForTimeout(500);
+    await assertReturnedPart(surface, candidate.id);
+    assert.equal(await surface.evaluate(() => document.activeElement.dataset.id), candidate.id,
+      "tablet resize preserves focus on the returned part");
+    if (width === 720 && shouldCapture("tablet-return"))
+      await surface.screenshot({ path: `${out}/tablet-return.png`, animations: "disabled" });
+    await tablet.close();
+  }
   if (values.fixture && !values.removed) {
     // Exercise presentation-only cases without changing the engine fixture or classification.
     const presentationReport = structuredClone(report);

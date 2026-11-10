@@ -1099,6 +1099,11 @@ function inspectorImpact(p) {
   syncRoving(content, "connections");
 }
 function closeDiff() {
+  const selected = parts.get(state.selected);
+  if (state.view === "board" && !state.scope && report.boards.length > 1) {
+    state.scope = { file: selected.file };
+    breadcrumb();
+  }
   state.selected = null;
   const origin = state.inspectOrigin;
   renderList();
@@ -1421,13 +1426,14 @@ async function init() {
         box.height > 0 &&
         size !== mapSize
       ) {
-        const active = document.activeElement;
+        const active = document.activeElement,
+          hover = state.hover;
         const focusKey = $("tiles").contains(active)
           ? active.dataset.focusKey
           : null;
         mapSize = size;
         renderMap();
-        if (state.hover) highlight(state.hover);
+        if (hover) highlight(hover);
         else resetImpact();
         if (focusKey)
           [...$("tiles").querySelectorAll("button")]
