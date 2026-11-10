@@ -1,3 +1,4 @@
+import { pack, touchSheetHeight } from "/layout.js";
 import { reach } from "/compare.js";
 import {
   orderedChanges,
@@ -8,6 +9,7 @@ import {
   padGroups,
   changedPadNumbers,
   changedMechanicalPads,
+  rankedNetReach,
 } from "/review.js";
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, className) => {
@@ -37,7 +39,8 @@ const state = {
 let report,
   parts,
   resize,
-  mapSize = "";
+  mapSize = "",
+  previewReset;
 const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
 const shortFile = (file) => file.split("/").at(-1).replace(".kicad_pcb", "");
@@ -90,20 +93,29 @@ function wireRoving(root, region) {
             );
     buttons[next].focus();
   });
-  if (region === "list")
-    root.addEventListener("pointerleave", (event) => {
-      if (event.pointerType !== "touch" && !state.touchPreview) {
-        const focused = document.activeElement;
-        if (focused.matches(".tile, .part-row") && focused.dataset.id)
-          highlight(focused.dataset.id);
-        else resetImpact();
-      }
-    });
+  if (region === "list") {
+    root.addEventListener("pointerenter", cancelPreviewReset);
+    root.addEventListener("pointerleave", schedulePreviewReset);
+  }
+}
+function cancelPreviewReset() {
+  clearTimeout(previewReset);
+}
+function schedulePreviewReset(event) {
+  if (event.pointerType === "touch" || state.touchPreview) return;
+  cancelPreviewReset();
+  previewReset = setTimeout(() => {
+    const focused = document.activeElement;
+    if (focused.matches(".tile, .part-row") && focused.dataset.id)
+      highlight(focused.dataset.id);
+    else if (!focused.closest("#impact")) resetImpact();
+  }, 120);
 }
 function partOrigin(node) {
   return {
     region: $("part-list").contains(node) ? "list" : "map",
     key: node.dataset.focusKey,
+    scrollY,
   };
 }
 function matches(p) {
@@ -186,7 +198,7 @@ function setScope(scope) {
   (
     $("tiles").querySelector(".tile, .board-chooser button") ??
     $("breadcrumbs").querySelector("button")
-  ).focus();
+  ).focus({ preventScroll: matchMedia("(max-width: 700px)").matches });
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
     $("tiles").animate(
       [
@@ -313,8 +325,8 @@ function wirePart(node, p) {
   node.onfocus = () => {
     if (!touchClick) highlight(p.id);
   };
-  node.onblur = () => {
-    if (!state.touchPreview) resetImpact();
+  node.onblur = (event) => {
+    if (!state.touchPreview && !event.relatedTarget?.closest("#impact")) resetImpact();
   };
   node.onclick = (event) => {
     if (touchClick && event.detail !== 0) {
@@ -328,42 +340,6 @@ function wirePart(node, p) {
     }
     openDiff(p, partOrigin(node));
   };
-}
-// Balanced binary treemap. Split by cumulative pad count along the longer axis.
-function pack(items, rect, visit, minSize = 0) {
-  if (!items.length) return;
-  if (items.length === 1) {
-    visit(items[0], rect);
-    return;
-  }
-  const total = items.reduce((s, p) => s + p.weight, 0);
-  let sum = 0,
-    cut = 0;
-  while (
-    cut < items.length - 1 &&
-    (sum === 0 || sum + items[cut].weight <= total / 2)
-  )
-    sum += items[cut++].weight;
-  const axis = rect.w >= rect.h ? rect.w : rect.h;
-  const floor = Math.min(minSize, axis / 2);
-  const ratio = Math.max(floor / axis, Math.min(1 - floor / axis, sum / total));
-  if (rect.w >= rect.h) {
-    pack(items.slice(0, cut), { ...rect, w: rect.w * ratio }, visit, minSize);
-    pack(
-      items.slice(cut),
-      { ...rect, x: rect.x + rect.w * ratio, w: rect.w * (1 - ratio) },
-      visit,
-      minSize,
-    );
-  } else {
-    pack(items.slice(0, cut), { ...rect, h: rect.h * ratio }, visit, minSize);
-    pack(
-      items.slice(cut),
-      { ...rect, y: rect.y + rect.h * ratio, h: rect.h * (1 - ratio) },
-      visit,
-      minSize,
-    );
-  }
 }
 function position(node, r, gap = 2) {
   Object.assign(node.style, {
@@ -432,6 +408,12 @@ function buildMap() {
   $("scope-count").title =
     `${shown.length} components across both revisions, including ${removed} removed in head`;
   $("map-empty").hidden = shown.length > 0;
+  const sheetItems = shown.map((p) => ({ p, weight: weight(p) }))
+    .sort((a, b) => b.weight - a.weight);
+  $("canvas").style.minHeight =
+    state.view === "map" && state.scope?.sheet && matchMedia("(max-width: 700px)").matches
+      ? `${touchSheetHeight(sheetItems, $("canvas").getBoundingClientRect().width)}px`
+      : "";
   const { width: w, height: h } = $("canvas").getBoundingClientRect();
   mapSize = `${w}:${h}`;
   if (!shown.length) return;
@@ -450,9 +432,7 @@ function buildMap() {
   // At sheet depth, the entire available area belongs to the parts.
   if (state.scope?.sheet) {
     pack(
-      shown
-        .map((p) => ({ p, weight: weight(p) }))
-        .sort((a, b) => b.weight - a.weight),
+      sheetItems,
       { x: 4, y: 4, w: w - 8, h: h - 8 },
       (item, r) => tile(item.p, r, root),
     );
@@ -570,6 +550,7 @@ function renderBoard(shown, w, h) {
   );
 }
 function highlight(id) {
+  cancelPreviewReset();
   state.hover = id;
   if (state.selected) return;
   const p = parts.get(id),
@@ -636,10 +617,25 @@ function highlight(id) {
   }
   const visible = result.ids.filter((id) => centers.has(id)).length;
   const title = `${p.ref} · ${result.ids.length} ${state.transitive ? `transitively reachable ${result.ids.length === 1 ? "part" : "parts"}` : `shared-net ${result.ids.length === 1 ? "neighbor" : "neighbors"}`}`;
-  impact(
+  const body = impact(
     title,
-    `${p.status === "modified" ? `Changed: ${changeFields(p).join(", ")}. ` : `${p.status[0].toUpperCase() + p.status.slice(1)}. `}${result.nets.length} ${result.nets.length === 1 ? "net" : "nets"} · ${visible} highlighted in view · ${result.ids.length - visible} outside this view. ${dense ? `${edges.length} curves shown, only links involving electrical, added or removed neighbors. ` : `${edges.length} curves shown. `}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation. " : ""}${result.nets.slice(0, 4).join(" · ")}${result.nets.length > 4 ? " …" : ""}`,
+    `${p.status === "modified" ? `Changed: ${changeFields(p).join(", ")}. ` : `${p.status[0].toUpperCase() + p.status.slice(1)}. `}${result.nets.length} ${result.nets.length === 1 ? "net" : "nets"} across base/head · ${visible} highlighted in view · ${result.ids.length - visible} outside this view. ${dense ? `${edges.length} curves shown, only links involving electrical, added or removed neighbors. ` : `${edges.length} curves shown. `}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation." : ""}`,
   );
+  const nets = rankedNetReach(report, p, result, state.transitive);
+  if (nets.length) {
+    const list = el("ul", undefined, "net-reach-list");
+    list.setAttribute("aria-label", "Reach by net across base and head; counts overlap");
+    list.setAttribute("aria-live", "off");
+    for (const net of nets) {
+      const row = el("li");
+      row.dataset.net = net.name;
+      row.dataset.count = net.count;
+      row.append(el("span", net.name), el("strong", `${net.count} ${net.count === 1 ? "part" : "parts"}`));
+      list.append(row);
+    }
+    body.append(list);
+    $("impact").tabIndex = 0;
+  }
   if (state.touchPreview === id) {
     const open = el("button", `Open ${p.ref} diff`, "open-preview");
     open.onclick = () => openDiff(p, state.previewOrigin);
@@ -649,6 +645,8 @@ function highlight(id) {
 
 function impact(title, text) {
   const box = $("impact");
+  box.tabIndex = -1;
+  box.scrollTop = 0;
   box.replaceChildren(el("span", undefined, "impact-dot"));
   const body = el("div");
   const heading = el("strong");
@@ -658,8 +656,10 @@ function impact(title, text) {
   else heading.textContent = title;
   body.append(heading, el("p", text));
   box.append(body);
+  return body;
 }
 function resetImpact() {
+  cancelPreviewReset();
   state.touchPreview = null;
   state.hover = null;
   $("connections").replaceChildren();
@@ -707,6 +707,7 @@ function openDiff(p, origin) {
   $("map-panel").hidden = true;
   const panel = $("diff-panel");
   panel.hidden = false;
+  panel.dataset.id = p.id;
   panel.replaceChildren();
   const head = el("div", undefined, "diff-header"),
     title = el("h2", p.ref);
@@ -939,7 +940,10 @@ function closeDiff() {
     (n) => n.dataset.focusKey === origin?.key,
   );
   (target ?? $("map-tab")).focus({ preventScroll: mobile });
-  if (mobile) $("canvas").scrollIntoView({ block: "nearest" });
+  if (mobile) {
+    window.scrollTo({ top: origin?.scrollY ?? 0, behavior: "instant" });
+    (target ?? $("canvas")).scrollIntoView({ block: "nearest" });
+  }
 }
 function padPosition(part, pad) {
   const angle = (part.angle * Math.PI) / 180;
@@ -951,13 +955,15 @@ function padPosition(part, pad) {
 function regionSvg(selected, key, extent) {
   const svg = svgEl("svg", {
     viewBox: `${-extent} ${-extent} ${extent * 2} ${extent * 2}`,
+    "data-revision": key,
     role: "img",
     "aria-label": `${key} pad region for ${selected.ref}`,
   });
   const anchor = selected[key];
   const changed = changedPadNumbers(selected);
   const mechanical = changedMechanicalPads(selected, key);
-  const regionHeight = matchMedia("(max-width: 700px)").matches ? 140 : 180;
+  const regionHeight = matchMedia("(max-width: 700px)").matches
+    ? 140 : matchMedia("(max-height: 820px)").matches ? 120 : 180;
   if (!anchor) {
     const label = svgEl("text", {
       "text-anchor": "middle",
@@ -1126,7 +1132,7 @@ async function init() {
     }
     for (const [key, label] of [
       ["parts", "parts"],
-      ["nets", "nets"],
+      ["nets", "head nets"],
       ["electrical", "electrical"],
       ["changed", "changed"],
       ["affected", "affected"],
@@ -1199,13 +1205,13 @@ async function init() {
     wireRoving($("part-list"), "list");
     wireRoving($("tiles"), "map");
     // Reset only after leaving the canvas, not when crossing tile gutters.
-    $("canvas").addEventListener("pointerleave", (event) => {
-      if (event.pointerType !== "touch" && !state.touchPreview) {
-        const focused = document.activeElement;
-        if (focused.matches(".tile, .part-row") && focused.dataset.id)
-          highlight(focused.dataset.id);
-        else resetImpact();
-      }
+    for (const node of [$("canvas"), $("impact")]) {
+      node.addEventListener("pointerenter", cancelPreviewReset);
+      node.addEventListener("pointerleave", schedulePreviewReset);
+    }
+    $("impact").addEventListener("focusin", cancelPreviewReset);
+    $("impact").addEventListener("focusout", (event) => {
+      if (!event.relatedTarget?.closest("#impact, #tiles, #part-list")) resetImpact();
     });
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
@@ -1216,7 +1222,7 @@ async function init() {
       if (
         event.pointerType === "touch" &&
         state.touchPreview &&
-        !event.target.closest(".tile, .part-row, .open-preview, .map-settings")
+        !event.target.closest(".tile, .part-row, #impact, .map-settings")
       )
         resetImpact();
     });
@@ -1244,6 +1250,12 @@ async function init() {
       }
     });
     resize.observe($("canvas"));
+    window.addEventListener("resize", () => {
+      if (!state.selected) return;
+      const p = parts.get(state.selected);
+      for (const svg of $("diff-panel").querySelectorAll(".region svg"))
+        svg.replaceWith(regionSvg(p, svg.dataset.revision, svg.viewBox.baseVal.width / 2));
+    });
     breadcrumb();
     renderList();
     renderMap();

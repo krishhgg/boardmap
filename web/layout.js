@@ -1,0 +1,53 @@
+// Balanced binary treemap. Split by cumulative pad count along the longer axis.
+export function pack(items, rect, visit, minSize = 0) {
+  if (!items.length) return;
+  if (items.length === 1) {
+    visit(items[0], rect);
+    return;
+  }
+  const total = items.reduce((s, p) => s + p.weight, 0);
+  let sum = 0,
+    cut = 0;
+  while (
+    cut < items.length - 1 &&
+    (sum === 0 || sum + items[cut].weight <= total / 2)
+  )
+    sum += items[cut++].weight;
+  const axis = rect.w >= rect.h ? rect.w : rect.h;
+  const floor = Math.min(minSize, axis / 2);
+  const ratio = Math.max(floor / axis, Math.min(1 - floor / axis, sum / total));
+  if (rect.w >= rect.h) {
+    pack(items.slice(0, cut), { ...rect, w: rect.w * ratio }, visit, minSize);
+    pack(
+      items.slice(cut),
+      { ...rect, x: rect.x + rect.w * ratio, w: rect.w * (1 - ratio) },
+      visit,
+      minSize,
+    );
+  } else {
+    pack(items.slice(0, cut), { ...rect, h: rect.h * ratio }, visit, minSize);
+    pack(
+      items.slice(cut),
+      { ...rect, y: rect.y + rect.h * ratio, h: rect.h * (1 - ratio) },
+      visit,
+      minSize,
+    );
+  }
+}
+// Grow a drilled phone map until every component has a 32px hit target.
+export function touchSheetHeight(items, width) {
+  const usableWidth = Math.max(1, width - 8);
+  const total = items.reduce((sum, item) => sum + item.weight, 0);
+  const smallest = Math.min(...items.map((item) => item.weight));
+  let height = Math.max(380, Math.ceil(total / smallest * 1600 / usableWidth) + 8);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    let side = Infinity;
+    pack(items, { x: 4, y: 4, w: usableWidth, h: height - 8 }, (_, rect) => {
+      side = Math.min(side, rect.w - 4, rect.h - 4);
+    });
+    if (side >= 32) return height;
+    height = Math.ceil(height * 1.2);
+  }
+  // A column bounds the fallback even for an unusually uneven pin distribution.
+  return Math.max(height, Math.ceil(total / smallest * usableWidth) + 8);
+}

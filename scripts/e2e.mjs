@@ -55,6 +55,10 @@ const capture = async (name) => {
       animations: "disabled",
     });
 };
+const previewSettled = (id) => page.waitForFunction((expected) => {
+  const tile = document.querySelector(".tile.hovered");
+  return expected ? tile?.dataset.id === expected : !tile;
+}, id);
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.locator(".tile").first().waitFor();
@@ -344,6 +348,14 @@ try {
     reach(report, candidate.id).ids.sort(),
     "all direct neighbors stay highlighted, including dense fans",
   );
+  const netCounts = await page.locator(".net-reach-list li").evaluateAll((nodes) =>
+    nodes.map((node) => ({ name: node.dataset.net, count: Number(node.dataset.count) })),
+  );
+  assert.deepEqual(netCounts.map((net) => net.name).sort(), reach(report, candidate.id).nets.sort(),
+    "the readout lists every included net across both revisions");
+  assert.deepEqual(netCounts.map((net) => net.count),
+    [...netCounts.map((net) => net.count)].sort((a, b) => b - a),
+    "larger net reach appears first");
   const paths = await page.locator("#connections path").count();
   assert.match(
     await page.locator("#impact").innerText(),
@@ -351,6 +363,14 @@ try {
   );
   // Move into the real gutter outside this tile, while staying inside the canvas.
   await page.locator("#search").focus();
+  await tile.hover();
+  await page.locator("#impact").hover();
+  // Let the intentional pointer-exit grace period elapse while reading the net list.
+  await page.waitForTimeout(160);
+  await page.locator(".net-reach-list li").last().scrollIntoViewIfNeeded();
+  assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), candidate.id,
+    "scrolling the full net breakdown preserves the graph preview");
+  await page.locator("#impact").evaluate((node) => { node.scrollTop = 0; });
   await tile.hover();
   const box = await tile.boundingBox();
   await page.mouse.move(box.x - 1, box.y + box.height / 2);
@@ -360,6 +380,7 @@ try {
     "crossing a tile gutter keeps the current preview",
   );
   await page.mouse.move(1, 1);
+  await previewSettled(null);
   assert.equal(
     await page.locator(".tile.hovered").count(),
     0,
@@ -370,6 +391,7 @@ try {
   const otherTile = page.locator(`.tile[data-id=${JSON.stringify(otherId)}]`);
   await otherTile.hover();
   await page.mouse.move(1, 1);
+  await previewSettled(candidate.id);
   assert.equal(
     await page.locator(".tile.hovered").getAttribute("data-id"),
     candidate.id,
@@ -380,6 +402,7 @@ try {
     await firstRow.focus();
     await otherTile.hover();
     await page.mouse.move(1, 1);
+    await previewSettled(await firstRow.getAttribute("data-id"));
     assert.equal(
       await page.locator(".tile.hovered").getAttribute("data-id"),
       await firstRow.getAttribute("data-id"),
@@ -388,6 +411,7 @@ try {
     await tile.focus();
     await firstRow.hover();
     await page.mouse.move(1, 1);
+    await previewSettled(candidate.id);
     assert.equal(
       await page.locator(".tile.hovered").getAttribute("data-id"),
       candidate.id,
@@ -619,6 +643,16 @@ try {
       changedPins(swap).length,
     );
     await capture("u17-inspector");
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 1024, height: 720 }]) {
+      await page.setViewportSize(viewport);
+      const first = await page.locator(".semantic tr").nth(1).boundingBox();
+      assert.ok(first.y >= 0 && first.y + first.height <= viewport.height,
+        "the first semantic change is visible on a laptop");
+      assert.equal((await page.locator("#impact").boundingBox()).height, 36);
+      assert.equal((await page.locator(".region svg").first().boundingBox()).height, 120);
+      assert.equal(await page.locator('.region svg[data-revision="before"]').count(), 1);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.keyboard.press("Escape");
   }
   for (const status of ["modified", "added", "removed"]) {
@@ -900,7 +934,7 @@ try {
     "Back brings the map into view",
   );
   await tapSamePoint();
-  await touchPage.locator("#impact p").tap();
+  await touchPage.locator("#project").tap();
   assert.equal(
     await touchPage.locator(".open-preview").count(),
     0,
@@ -915,6 +949,30 @@ try {
     0,
     "Escape dismisses touch preview",
   );
+
+  if (report.boards.length === 1) {
+    await touchPage.locator("#breadcrumbs button").first().tap();
+    await touchPage.locator(".group-title").first().tap();
+    const targets = await touchPage.locator(".tile").evaluateAll((nodes) => nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { id: node.dataset.id, side: Math.min(box.width, box.height) };
+    }));
+    assert.ok(targets.every((tile) => tile.side >= 32), "drilled phone parts have 32px touch targets");
+    const smallest = targets.sort((a, b) => a.side - b.side)[0];
+    const small = touchPage.locator(`.tile[data-id=${JSON.stringify(smallest.id)}]`);
+    await small.scrollIntoViewIfNeeded();
+    const box = await small.boundingBox(), x = box.x + box.width / 2, y = box.y + box.height / 2;
+    await touchPage.touchscreen.tap(x, y);
+    await touchPage.touchscreen.tap(x, y);
+    await touchPage.locator("#diff-panel").waitFor({ state: "visible" });
+    assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), smallest.id,
+      "two physical taps inspect the same small component");
+    await touchPage.locator(".close-diff").tap();
+    assert.equal(await touchPage.evaluate(() => document.activeElement.dataset.id), smallest.id);
+    const restored = await small.boundingBox();
+    assert.ok(restored.y >= 0 && restored.y + restored.height <= 844,
+      "Back restores the selected target inside the long sheet map");
+  }
 
   await touch.close();
   if (values.fixture && !values.removed) {

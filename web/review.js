@@ -168,3 +168,26 @@ export function changedMechanicalPads(part, key) {
     }),
   );
 }
+
+// Count every reachable peer on each net, not only the first edge that found it.
+export function rankedNetReach(report, part, result, transitive = false) {
+  const reached = new Set([part.id, ...result.ids]);
+  const included = new Set(result.nets);
+  return Object.values(report.nets)
+    .filter((net) => net.file === part.file && included.has(net.name))
+    .map((net) => {
+      const peers = new Set();
+      for (const members of [net.before, net.after]) {
+        const connected = transitive
+          ? members.some((id) => reached.has(id))
+          : members.includes(part.id);
+        if (!connected) continue;
+        for (const id of members)
+          if (id !== part.id && reached.has(id)) peers.add(id);
+      }
+      return { name: net.name, count: peers.size };
+    })
+    .sort((a, b) =>
+      b.count - a.count || a.name.localeCompare(b.name, undefined, { numeric: true }),
+    );
+}
