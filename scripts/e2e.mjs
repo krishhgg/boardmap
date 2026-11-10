@@ -601,7 +601,7 @@ try {
   await assertReturnedPart(page, reachedId);
   await capture("returned-part");
   const parkedPart = report.parts
-    .filter((p) => p.id !== candidate.id && p.id !== reachedId)
+    .filter((p) => p.id !== reachedId)
     .sort((a, b) => Object.keys(b.pins).length - Object.keys(a.pins).length)[0];
   const parkedBox = await page.locator(`.tile[data-id=${JSON.stringify(parkedPart.id)}]`).boundingBox();
   await tile.click();

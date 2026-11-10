@@ -11,7 +11,7 @@ These are actual Chromium captures of the pinned HackRF and Corne comparisons. N
 | `hackrf/touch-return.png`, `corne/touch-return.png` | 390 × 844 | Touch Back restores the marked part, readout and original viewport position. |
 | `hackrf/touch-root.png`, `corne/touch-root.png` | 390 × 844 | Long root-sheet references fit without reducing type below 9px. |
 | `corne/board-neighbor-return.png` | 1440 × 1000 | Both populated boards loaded unchanged. Following a neighbor chooses its board, and Back visibly marks that neighbor. |
-| `corne/board-list-return.png`, `corne/touch-board-list-return.png` | 1440 × 900, 390 × 844 | Opening from the changes list before choosing a board returns to that part's board, with its exact reference marked and named. |
+| `corne/board-list-return.png`, `corne/touch-board-list-return.png` | 1440 × 1000, 390 × 844 | Opening from the changes list before choosing a board returns to that part's board, with its exact reference marked and named. |
 | `hackrf/tablet-return.png`, `corne/tablet-return.png` | 720 × 900 | The return mark and readout survive the resize notification after the inspector closes. |
 
 ## Reproduce
