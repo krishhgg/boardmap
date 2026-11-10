@@ -40,14 +40,14 @@ export function touchSheetHeight(items, width) {
   const total = items.reduce((sum, item) => sum + item.weight, 0);
   const smallest = Math.min(...items.map((item) => item.weight));
   let height = Math.max(380, Math.ceil(total / smallest * 1600 / usableWidth) + 8);
-  for (let attempt = 0; attempt < 6; attempt++) {
+  // A column bounds growth even for an unusually uneven pin distribution.
+  const limit = Math.max(height, Math.ceil(total / smallest * usableWidth) + 8);
+  for (;;) {
     let side = Infinity;
     pack(items, { x: 4, y: 4, w: usableWidth, h: height - 8 }, (_, rect) => {
       side = Math.min(side, rect.w - 4, rect.h - 4);
     });
-    if (side >= 32) return height;
-    height = Math.ceil(height * 1.2);
+    if (side >= 32 || height >= limit) return height;
+    height = Math.min(limit, Math.ceil(height * 1.2));
   }
-  // A column bounds the fallback even for an unusually uneven pin distribution.
-  return Math.max(height, Math.ceil(total / smallest * usableWidth) + 8);
 }

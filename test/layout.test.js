@@ -20,6 +20,12 @@ test("small sheets keep the ordinary map height", () => {
   assert.equal(touchSheetHeight([{ weight: 144 }], 374), 380);
   assert.equal(touchSheetHeight([], 374), 380);
 });
+test("a large IC and one resistor do not trigger a column-sized sheet", () => {
+  const items = [100, 3].map((weight) => ({ weight }));
+  const height = touchSheetHeight(items, 374);
+  assert.ok(height < 2000, `two parts should not need ${height}px`);
+  assert.ok(minimumSide(items, 374, height) >= 32);
+});
 test("uneven pad counts still preserve every touch target", () => {
   const items = [3000, ...Array(19).fill(3)].map((weight) => ({ weight }));
   const height = touchSheetHeight(items, 374);

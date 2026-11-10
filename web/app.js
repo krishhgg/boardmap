@@ -387,7 +387,7 @@ function tile(p, r, parent) {
   node.title = `${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
   // Measure the whole reference in the loaded utility face. Never render a clipped ID.
   const compact = r.w < 65 || r.h < 40;
-  const horizontalPadding = compact ? 3 : 5;
+  const horizontalPadding = compact ? 2 : 5;
   const verticalPadding = compact ? 2 : 5;
   node.style.padding = `${verticalPadding}px ${horizontalPadding}px`;
   const available = r.w - 6 - horizontalPadding * 2;
@@ -1042,7 +1042,10 @@ function inspectorImpact(p) {
       button.onclick = () => {
         state.query = "";
         $("search").value = "";
-        if (!inScope(peer)) {
+        if (state.view === "board" && !state.scope && report.boards.length > 1) {
+          state.scope = { file: peer.file };
+          breadcrumb();
+        } else if (!inScope(peer)) {
           state.scope = { file: peer.file, sheet: displaySheet(peer) };
           breadcrumb();
         }

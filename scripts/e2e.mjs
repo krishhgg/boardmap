@@ -50,6 +50,7 @@ const detailCaptures = new Set([
   "map", "reach", "reached-parts", "laptop-inspector",
   "classification", "touch-sheet", "touch-sheet-preview",
   "readout-1280", "readout-1024",
+  "board-neighbor-return",
 ]);
 const shouldCapture = (name) =>
   out && (values.detail
@@ -801,10 +802,24 @@ try {
   await page.locator("#only-changed").uncheck();
   assert.equal(await page.locator(".part-row").count(), report.parts.length);
   await page.locator("#board-tab").click();
-  if (report.boards.length > 1) {
+  const populatedBoards = [...new Set(report.parts.map((p) => p.file))];
+  if (populatedBoards.length > 1) {
     const choices = page.locator(".board-chooser button");
-    assert.equal(await choices.count(), report.boards.length);
-    for (const file of report.boards) {
+    assert.equal(await choices.count(), populatedBoards.length);
+    await page.locator(`.part-row[data-id=${JSON.stringify(candidate.id)}]`).press("Enter");
+    await page.locator(".reach-details > summary").click();
+    const neighbor = page.locator(".reach-part").first();
+    await neighbor.waitFor();
+    const neighborId = await neighbor.getAttribute("data-id");
+    await neighbor.click();
+    await page.locator(".close-diff").click();
+    assert.equal(await choices.count(), 0, "following a neighbor chooses its board for return");
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.id), neighborId,
+      "Back focuses the exact neighbor instead of the board-view tab");
+    assert.ok(await page.locator(`.tile[data-id=${JSON.stringify(neighborId)}]`).isVisible());
+    await capture("board-neighbor-return");
+    await page.locator("#breadcrumbs button").first().click();
+    for (const file of populatedBoards) {
       await page
         .getByRole("button", { name: file, exact: true })
         .press("Enter");
@@ -827,7 +842,7 @@ try {
       await page.locator("#breadcrumbs button").first().click();
     }
     await page
-      .getByRole("button", { name: report.boards.at(-1), exact: true })
+      .getByRole("button", { name: populatedBoards.at(-1), exact: true })
       .click();
   }
   assert.doesNotMatch(
