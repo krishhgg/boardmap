@@ -4,7 +4,7 @@ See what a PCB change touches.
 
 A local, whole-design map for KiCad git reviews. Hover a part to trace its shared nets. Click it to inspect value, footprint, manufacturing fields, and pin-net changes, with before/after pad regions.
 
-![Corne PR review, map to electrical reach to part diff](https://raw.githubusercontent.com/krishhgg/boardmap/0a4af54831ef343dfff4c1f13f541c7fc434648d/docs/media/instrument/boardmap-demo.gif)
+![Corne PR review, map to electrical reach to part diff](https://raw.githubusercontent.com/krishhgg/boardmap/29c6db7e64b87f183c04a5f2c410b19527f2718a/docs/media/instrument/boardmap-demo.gif)
 
 ## Run it
 
@@ -38,7 +38,7 @@ By default, it includes every component in boards whose files changed. If no boa
 
 The header counts head parts and nets, electrical changes and all changed components including removals. Electrical changes include parts with pin, pad, value or footprint edits, DNP population transitions, replacements of both-present MPN / Part Number / Manufacturer Part Number identifiers, and added or removed parts with pads. Filling an empty supplier or descriptive field alone stays in Metadata. The in-view total includes removed components and names their count separately. Affected means unchanged direct neighbors of changed parts, excluding ground, across either revision. It is independent of the current hover and reach controls. Stable sheet UUIDs identify label renames. Boardmap reports these separately and normalizes old hierarchical net prefixes only when the mapping is unambiguous and does not merge distinct historical nets. Real rewires remain in the pin diff. Footprint rotations compare pad angles relative to the footprint, so rotation alone does not create a pad dump.
 
-![Shared-net reach on the real Corne PR](https://raw.githubusercontent.com/krishhgg/boardmap/0a4af54831ef343dfff4c1f13f541c7fc434648d/docs/media/instrument/demo-frames/03-reach.png)
+![Shared-net reach on the real Corne PR](https://raw.githubusercontent.com/krishhgg/boardmap/29c6db7e64b87f183c04a5f2c410b19527f2718a/docs/media/instrument/demo-frames/03-reach.png)
 
 ## Try the real PRs
 
