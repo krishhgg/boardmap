@@ -1216,7 +1216,7 @@ async function init() {
       if (
         event.pointerType === "touch" &&
         state.touchPreview &&
-        !event.target.closest(".tile, .part-row, .open-preview")
+        !event.target.closest(".tile, .part-row, .open-preview, .map-settings")
       )
         resetImpact();
     });

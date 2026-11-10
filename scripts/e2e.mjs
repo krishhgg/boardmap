@@ -584,16 +584,21 @@ try {
     }
     await platformStyle.evaluate((node) => node.remove());
   }
-  const swap = report.parts.find(
-    (p) => p.ref === "U17" && p.changes.some((c) => c.field === "value"),
-  );
+  const swap =
+    report.parts.find(
+      (p) => p.ref === "U17" && p.changes.some((c) => c.field === "value"),
+    ) ??
+    (values.fixture && !values.removed
+      ? report.parts.find((p) => p.changes.some((c) => c.field === "value"))
+      : undefined);
   if (swap) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page
       .locator(`.part-row[data-id=${JSON.stringify(swap.id)}]`)
       .press("Enter");
-    for (const field of ["value", "footprint"]) {
-      const c = swap.changes.find((c) => c.field === field);
+    for (const c of swap.changes.filter((c) =>
+      ["value", "footprint"].includes(c.field),
+    )) {
       assert.ok(
         (await page.locator(".swap-context").innerText()).includes(
           `${c.before} → ${c.after}`,
@@ -604,10 +609,11 @@ try {
       (await page.locator(".swap-context").boundingBox()).y < 450,
       "part replacement context appears above the long pin table",
     );
-    assert.match(
-      await page.locator(".semantic tr").nth(1).innerText(),
-      /^Pin /,
-    );
+    if (changedPins(swap).length)
+      assert.match(
+        await page.locator(".semantic tr").nth(1).innerText(),
+        /^Pin /,
+      );
     assert.equal(
       await page.locator(".semantic tr").filter({ hasText: /^Pin / }).count(),
       changedPins(swap).length,
@@ -773,6 +779,28 @@ try {
     (await touchPage.locator(".affected").count()) > 0,
     "touch highlights neighbors",
   );
+  await touchPage.locator("#ground").tap();
+  assert.deepEqual(
+    await touchPage.locator(".tile.affected").evaluateAll((nodes) =>
+      nodes.map((node) => node.dataset.id).sort(),
+    ),
+    reach(report, candidate.id, { includeGround: true }).ids.sort(),
+    "touching the ground control updates the current preview",
+  );
+  await touchPage.locator("#reach").dispatchEvent("pointerdown", {
+    pointerType: "touch",
+  });
+  await touchPage.locator("#reach").selectOption("transitive");
+  assert.match(
+    await touchPage.locator("#impact").innerText(),
+    /transitively reachable/,
+  );
+  assert.ok(
+    await touchPage.locator(".open-preview").isVisible(),
+    "touching reach settings preserves the preview action",
+  );
+  await touchPage.locator("#reach").selectOption("direct");
+  await touchPage.locator("#ground").tap();
   await touchCapture("touch-reach");
   await touchPage
     .getByRole("button", { name: `Open ${candidate.ref} diff`, exact: true })
