@@ -20,17 +20,21 @@ function breadcrumb() {
     if (state.scope.sheet) { nav.append(el('span','/')); nav.append(el('span',state.scope.sheet)); }
   }
 }
-function setScope(scope) { state.scope=scope; state.selected=null; $('diff-panel').hidden=true; $('map-panel').hidden=false; breadcrumb(); renderMap(); resetImpact(); ($('tiles').querySelector('.tile, .board-chooser button') ?? $('breadcrumbs').querySelector('button')).focus(); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) $('tiles').animate([{opacity:.4,transform:'scale(.98)'},{opacity:1,transform:'scale(1)'}],{duration:180,easing:'ease-out'}); }
+function setScope(scope) { state.scope=scope; state.selected=null; $('diff-panel').hidden=true; $('map-panel').hidden=false; breadcrumb(); renderList(); renderMap(); resetImpact(); ($('tiles').querySelector('.tile, .board-chooser button') ?? $('breadcrumbs').querySelector('button')).focus(); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) $('tiles').animate([{opacity:.4,transform:'scale(.98)'},{opacity:1,transform:'scale(1)'}],{duration:180,easing:'ease-out'}); }
 function renderList() {
   const list=$('part-list'); list.replaceChildren();
-  const shown = report.parts.filter(p=>matches(p) && (!$('only-changed').checked || p.status!=='unchanged'));
+  const shown = report.parts.filter(p=>inScope(p) && matches(p) && (!$('only-changed').checked || p.status!=='unchanged')).sort((a,b)=>a.ref.localeCompare(b.ref,undefined,{numeric:true}) || a.file.localeCompare(b.file));
   $('list-count').textContent=`${shown.length} shown`;
   for (const p of shown) {
     const row=el('button',undefined,`part-row ${p.status}`); row.dataset.id=p.id;
     row.setAttribute('aria-label',`${p.ref}, ${p.value}, ${p.status}, ${shortFile(p.file)}`);
     row.append(el('span',mark(p),'status-mark'));
     const meta=el('span',undefined,'part-meta'); meta.append(el('strong',p.ref),el('small',`${p.value || p.footprint} · ${shortFile(p.file)}`));
-    row.append(meta,el('span',p.status==='modified'?`${p.changes.length} Δ`:mark(p),'change-fields'));
+    if(p.status==='modified') {
+      const fields=p.changes.map(c=>({pins:'pin nets',pads:'pad geometry',fields:'properties',attributes:'assembly',angle:'rotation'})[c.field] ?? c.field);
+      const summary=el('small',fields.slice(0,3).join(' · ')+(fields.length>3?` +${fields.length-3}`:''),'row-summary');summary.title=fields.join(', ');meta.append(summary);
+    }
+    row.append(meta);
     wirePart(row,p); list.append(row);
   }
   if (!shown.length) list.append(el('p','No components match. Clear the search or include unchanged parts.','empty'));
@@ -94,7 +98,8 @@ function renderMap() {
   const items=[...groups].map(([key,ps])=>({key,ps,weight:ps.reduce((s,p)=>s+weight(p),0)})).sort((a,b)=>b.weight-a.weight);
   pack(items,{x:3,y:3,w:w-6,h:h-6},(group,r)=> {
     const node=el('div',undefined,'group'); position(node,r,3);
-    const title=el('button',undefined,'group-title'); title.append(el('span',groupByBoard?shortFile(group.key):group.key==='/'?'Root sheet':group.key),el('small',`${group.ps.length} parts ↗`));
+    const title=el('button',undefined,'group-title'); title.append(el('span',groupByBoard?shortFile(group.key):group.key==='/'?'Root sheet':group.key),el('small',`${group.ps.length} ${group.ps.length===1?'part':'parts'} ↗`));
+    title.title=groupByBoard?group.key:group.key==='/'?'Root sheet':group.key;
     title.setAttribute('aria-label',`Open ${group.key==='/'?'Root sheet':group.key}`);
     title.onclick=()=>setScope(groupByBoard?{file:group.key}:{file:group.ps[0].file,sheet:group.key}); node.append(title);
     const inner={x:2,y:30,w:Math.max(1,r.w-10),h:Math.max(1,r.h-38)};
@@ -137,7 +142,7 @@ function highlight(id) {
   for (const edge of result.edges) {
     const a=centers.get(edge.source),b=centers.get(edge.target); if (!a || !b) continue;
     const d=`M ${a.x} ${a.y} C ${a.x} ${(a.y+b.y)/2-30}, ${b.x} ${(a.y+b.y)/2-30}, ${b.x} ${b.y}`;
-    svg.append(svgEl('path',{d,fill:'none',stroke:edge.net.includes('V')?'#ffb66e':'#82bbdf','stroke-width':1.4,opacity:.65}));
+    svg.append(svgEl('path',{d,fill:'none',stroke:'#82bbdf','stroke-width':1.4,opacity:.42}));
   }
   const visible=result.ids.filter(id=>centers.has(id)).length;
   const title=`${p.ref} · ${result.ids.length} ${state.transitive?'transitively reachable parts':'shared-net neighbors'}`;
@@ -186,6 +191,13 @@ function openDiff(p) {
         for (const pin of [...new Set([...Object.keys(c.before),...Object.keys(c.after)])].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))) {
           if (JSON.stringify(c.before[pin])!==JSON.stringify(c.after[pin])) row(`Pin ${pin}`,c.before[pin]?.join(', '),c.after[pin]?.join(', '));
         }
+      } else if(c.field==='pads') {
+        const group=pads=>{const map=new Map();for(const pad of pads){if(!map.has(pad.number))map.set(pad.number,[]);map.get(pad.number).push(pad);}return map;};
+        const a=group(c.before),b=group(c.after);
+        const describe=pads=>pads?.map(pad=>`${pad.type} ${pad.shape}; ${pad.w} × ${pad.h} mm; at ${pad.x}, ${pad.y}; ${pad.angle}°; drill ${JSON.stringify(pad.drill)}; layers ${pad.layers.join(', ')}${pad.geometry.length?`; shape ${JSON.stringify(pad.geometry)}`:''}`).join('\n');
+        for(const number of [...new Set([...a.keys(),...b.keys()])].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))) {
+          if(JSON.stringify(a.get(number))!==JSON.stringify(b.get(number))) row(`Pad ${number || 'mechanical'} geometry`,describe(a.get(number)),describe(b.get(number)));
+        }
       } else row(c.field,c.before,c.after);
     }
     if (!changes.length) row('Component','No semantic changes','No semantic changes');
@@ -232,6 +244,10 @@ async function init() {
     $('revision').textContent=`${report.base.slice(0,8)} → ${report.head.slice(0,8)}`;
     $('project').textContent=report.boards.length===1?report.boards[0]:`${report.boards.length} boards · ${report.boards.map(shortFile).join(' / ')}`;
     $('change-count').textContent=report.stats.changed;
+    if(report.sheetRenames?.length) {
+      const details=el('details',undefined,'sheet-renames');details.append(el('summary',`${report.sheetRenames.length} sheet labels renamed · net prefixes normalized where unambiguous`));
+      const list=el('ul');for(const rename of report.sheetRenames)list.append(el('li',`${rename.before} → ${rename.after}`));details.append(list);$('project').after(details);
+    }
     for (const [key,label] of [['parts','parts'],['nets','nets'],['sheets','sheets'],['changed','changed'],['affected','affected']]) {
       const box=el('div',undefined,['changed','affected'].includes(key)?'accent':'');box.append(el('strong',report.stats[key]),el('span',label));
       box.title=key==='affected'?'Unchanged direct shared-net neighbors of changed parts, excluding ground, across both revisions.':key==='parts'?'Parts in head; removed parts remain visible in the map.':'';
