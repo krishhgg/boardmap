@@ -529,7 +529,7 @@ function openDiff(p) {
         )) {
           if (JSON.stringify(a.get(number)) !== JSON.stringify(b.get(number)))
             row(
-              `Pad ${number || "mechanical"} geometry`,
+              `Pad ${number || "mechanical"} local geometry`,
               describe(a.get(number)),
               describe(b.get(number)),
             );

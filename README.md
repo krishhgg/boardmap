@@ -33,7 +33,7 @@ By default, it includes every component in boards whose files changed. If no boa
 - Hover or keyboard-focus any part, in the map or sidebar, to trace shared-net neighbors. Both revisions contribute connections, so disconnecting or removing a part still shows its former neighbors. Power nets connect a regulator to every part on that rail. Ground is excluded by name by default and can be included.
 - Direct reach follows one net hop. Transitive reach walks through components and their nets. This is structural adjacency across both revisions, not circuit simulation or a claim that signals pass through an IC. Large transitive results can span most of a board.
 - Click a sheet to zoom, use breadcrumbs to return, or switch to component centers in Board layout. Each board has its own chooser when a repository contains multiple designs.
-- Click a part for its semantic diff and local pad regions. Press Escape or Back to map to return. Search by reference, value, footprint, or net. The sidebar follows the current board or sheet, sorts references numerically and names changed fields. Changed only filter does not hide unchanged context in the map.
+- Click a part for its semantic diff and local pad regions. Press Escape or Back to map to return. Search by reference, value, footprint, or net. The sidebar follows the current board or sheet, sorts references numerically and names changed fields. The Changed only filter does not hide unchanged context in the map.
 
 The stats count head parts and nets, sheet groups across both revisions, and changed components including removals. Affected means unchanged direct neighbors of changed parts, excluding ground, across either revision. It is independent of the current hover and reach controls. Stable sheet UUIDs identify label renames. Boardmap reports these separately and normalizes old hierarchical net prefixes only when the mapping is unambiguous and does not merge distinct historical nets. Real rewires remain in the pin diff. Footprint rotations compare pad angles relative to the footprint, so rotation alone does not create a pad dump.
 
@@ -54,7 +54,7 @@ Each command fetches two pinned commits into a per-user cache, without a checkou
 
 | Source PR | Comparison | Head parts | Changed | Unchanged affected |
 | --- | --- | ---: | ---: | ---: |
-| [HackRF #1411, HackRF One r10](https://github.com/greatscottgadgets/hackrf/pull/1411) | `f6598e7b..3bdc5547`, changed board | 437 | 390 | 61 |
+| [HackRF #1411, HackRF One r10](https://github.com/greatscottgadgets/hackrf/pull/1411) | `f6598e7b..3bdc5547`, changed board | 437 | 392 | 59 |
 | [Corne #237, v4.1.0](https://github.com/foostan/crkbd/pull/237) | `a935f345..eaf6e072`, cherry board | 180 | 18 | 102 |
 
 The Corne PR changes both cherry and chocolate boards. Without `--board`, its report includes 360 head parts and 30 changed parts. The demo script selects cherry for a smaller review. See [all captures](docs/media), including HackRF and mobile layouts. Captures are actual Chromium runs, not mockups.
@@ -77,7 +77,7 @@ This version reads `.kicad_pcb` footprint and pad data, including the s-expressi
 - Connectivity comes from board pad net assignments. A schematic-only change, including a value or net change not yet pushed to the PCB, is not analyzed. Schematic hierarchy comes from footprint sheet metadata; absent metadata falls into Root sheet. Full hierarchical schematic parsing is future work.
 - The diff compares values, footprint names, fields such as MPN, position, rotation, side, sheet, numbered pin-net assignments, and stored pad geometry, drills, and layers. Copper tracks, vias, zones, graphics, design rules and other manufacturing settings are outside this comparison. A copper-only edit can report zero changed components.
 - The local regions draw basic pad shapes, drill holes and neighboring footprints, not full silkscreen or copper artwork. Nonstandard shapes are labeled approximate. The board view shows footprint centers and can overlap densely packed parts. Use the map or sidebar to select those parts.
-- Components match by board path and reference, with UUIDs for duplicate references. Reference renames or moving parts between board files appear as removal/addition. Net names are scoped per board. Ground suppression recognizes common names such as GND, AGND, DGND, GNDR, GNDL, VSS and their sheet-qualified variants; other return names require the ground toggle or will be included.
+- Components match by board path and reference, with UUIDs for duplicate references. Reference renames or moving parts between board files appear as removal/addition. Net names are scoped per board. Ground suppression recognizes common names such as GND, AGND, DGND, GNDR, GNDL, VSS and their sheet-qualified variants; other return names remain included. This is a name-based filter.
 - DRC/ERC delta and a GitHub Action that posts a PR summary are future work. There is no release or npm registry publication.
 
 ## Development

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { mkdir } from "node:fs/promises";
 import { buildReport } from "../src/git.js";
@@ -18,7 +19,7 @@ const server = await serve(report),
     executablePath: process.env.BOARDMAP_BROWSER || undefined,
   });
 const page = await browser.newPage({
-  viewport: { width: 1200, height: 900 },
+  viewport: { width: 1000, height: 1100 },
   deviceScaleFactor: 1,
 });
 const out = "docs/media/demo-frames";
@@ -26,10 +27,14 @@ await mkdir(out, { recursive: true });
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.locator(".tile").first().waitFor();
-  const capture = async (name) =>
-    page
-      .locator(".workspace")
-      .screenshot({ path: `${out}/${name}.png`, animations: "disabled" });
+  const capture = async (name) => {
+    const box = await page.locator(".workspace").boundingBox();
+    return page.screenshot({
+      path: `${out}/${name}.png`,
+      clip: { x: 0, y: box.y, width: 1000, height: 850 },
+      animations: "disabled",
+    });
+  };
   await capture("01-map");
   await page.getByRole("button", { name: "Open left", exact: true }).click();
   await page.locator("#impact").hover();
@@ -41,6 +46,14 @@ try {
   await capture("03-reach");
   await target.click();
   await page.locator("#diff-panel").waitFor({ state: "visible" });
+  assert.deepEqual(
+    await page
+      .locator(".semantic tr")
+      .filter({ hasText: /^Pin 2/ })
+      .locator("td")
+      .allTextContents(),
+    ["Pin 2", "GND", "VBUS"],
+  );
   await capture("04-diff");
   console.log(
     "Captured real Corne ZD1 review frames. Pin 2 changes from GND to VBUS.",

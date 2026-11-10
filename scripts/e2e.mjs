@@ -104,6 +104,16 @@ try {
       "rotated pads fit region",
     );
   }
+  if (values.fixture && !values.removed) {
+    const row = page
+      .locator(".semantic tr")
+      .filter({ has: page.getByRole("cell", { name: "Value", exact: true }) });
+    assert.deepEqual(await row.locator("td").allTextContents(), [
+      "Value",
+      "5V regulator",
+      "3V3 regulator",
+    ]);
+  }
   await capture("diff");
   await page.keyboard.press("Escape");
   await page.locator("#map-panel").waitFor({ state: "visible" });
