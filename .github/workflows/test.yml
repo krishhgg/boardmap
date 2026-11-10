@@ -18,3 +18,4 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- --base HEAD --head HEAD
       - run: npm run test:e2e -- --fixture
+      - run: npm run test:e2e -- --fixture --removed
