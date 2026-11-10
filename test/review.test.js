@@ -6,6 +6,7 @@ import {
   changedPadNumbers,
   orderedChanges,
   isElectrical,
+  changedMechanicalPads,
 } from "../web/review.js";
 const part = (changes = [], extra = {}) => ({
   status: "modified",
@@ -93,6 +94,18 @@ test("mechanical pad changes remain visible in the region highlight", () => {
     },
   ]);
   assert.ok(changedPadNumbers(p).has(""));
+});
+
+test("only changed mechanical pads highlight among multiple mounting holes", () => {
+  const hole = (x, drill, angle = 0) => ({ number: "", x, drill: [drill], angle });
+  const before = { angle: 0, pads: [hole(0, "1"), hole(5, "1")] };
+  const after = { angle: 90, pads: [hole(5, "1", 90), hole(0, "1.4", 90)] };
+  const p = { before, after };
+  assert.deepEqual([...changedMechanicalPads(p, "before")], [before.pads[0]]);
+  assert.deepEqual([...changedMechanicalPads(p, "after")], [after.pads[1]]);
+  const added = { before: null, after };
+  assert.equal(changedMechanicalPads(added, "after").size, 2);
+  assert.equal(changedMechanicalPads(added, "before").size, 0);
 });
 
 test("population transitions and both-present part identifiers outrank descriptive fields", () => {

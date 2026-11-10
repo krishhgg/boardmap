@@ -214,6 +214,13 @@ try {
       2,
       "changed mounting hole highlights in both revisions",
     );
+    assert.equal(
+      await page
+        .locator('.region [data-selected="true"][data-pad=""][data-changed="false"]')
+        .count(),
+      2,
+      "the other mounting hole stays unchanged in both revisions",
+    );
     for (const width of [720, 390]) {
       await page.setViewportSize({ width, height: 844 });
       const property = page.getByRole("cell", {

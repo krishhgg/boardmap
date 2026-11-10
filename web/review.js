@@ -93,3 +93,36 @@ export function changedPadNumbers(part) {
   }
   return numbers;
 }
+
+// Mechanical pads have no pin number. Match unchanged geometry as a multiset.
+export function changedMechanicalPads(part, key) {
+  const revision = part[key];
+  if (!revision) return new Set();
+  const pads = revision.pads.filter((pad) => !pad.number);
+  const other = part[key === "before" ? "after" : "before"];
+  if (!other) return new Set(pads);
+  const signature = (pad, owner) => {
+    const angle = (pad.angle ?? 0) - (owner.angle ?? 0);
+    return JSON.stringify(
+      Object.fromEntries(
+        Object.entries({
+          ...pad,
+          angle: Number(((((angle % 360) + 360) % 360)).toFixed(6)),
+        })
+          .filter(([field]) => field !== "net")
+          .sort(([a], [b]) => a.localeCompare(b)),
+      ),
+    );
+  };
+  const remaining = other.pads
+    .filter((pad) => !pad.number)
+    .map((pad) => signature(pad, other));
+  return new Set(
+    pads.filter((pad) => {
+      const index = remaining.indexOf(signature(pad, revision));
+      if (index < 0) return true;
+      remaining.splice(index, 1);
+      return false;
+    }),
+  );
+}

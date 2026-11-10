@@ -7,6 +7,7 @@ import {
   isElectrical,
   padGroups,
   changedPadNumbers,
+  changedMechanicalPads,
 } from "/review.js";
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, className) => {
@@ -815,6 +816,7 @@ function regionSvg(selected, key, extent) {
   });
   const anchor = selected[key];
   const changed = changedPadNumbers(selected);
+  const mechanical = changedMechanicalPads(selected, key);
   const regionHeight = matchMedia("(max-width: 700px)").matches ? 140 : 180;
   if (!anchor) {
     const label = svgEl("text", {
@@ -838,9 +840,12 @@ function regionSvg(selected, key, extent) {
       const pos = padPosition(part, pad),
         x = dx + pos.x,
         y = dy + pos.y;
+      const edited =
+        p.id === selected.id &&
+        (pad.number ? changed.has(pad.number) : mechanical.has(pad));
       const color =
         p.id === selected.id
-          ? changed.has(pad.number)
+          ? edited
             ? key === "before"
               ? "#f0708a"
               : "#3ecf98"
@@ -863,12 +868,12 @@ function regionSvg(selected, key, extent) {
         fill: color,
         "data-pad": pad.number,
         "data-selected": p.id === selected.id,
-        "data-changed": p.id === selected.id && changed.has(pad.number),
+        "data-changed": edited,
         opacity: p.id === selected.id ? 0.9 : 0.4,
         transform: `rotate(${-pad.angle} ${x} ${y})`,
       });
       const padTitle = svgEl("title");
-      padTitle.textContent = `${p.ref} · pad ${pad.number || "mechanical"}${p.id === selected.id && changed.has(pad.number) ? " · changed" : ""}`;
+      padTitle.textContent = `${p.ref} · pad ${pad.number || "mechanical"}${edited ? " · changed" : ""}`;
       rect.append(padTitle);
       svg.append(rect);
       if (pad.drill?.length) {
