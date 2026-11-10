@@ -14,10 +14,11 @@ export function readBoard(text, file) {
       const pos = child(p, 'at') ?? [], size = child(p, 'size') ?? [], net = child(p, 'net');
       return {number: p[1], type: p[2], shape: p[3], x: Number(pos[1] ?? 0), y: Number(pos[2] ?? 0),
         angle: Number(pos[3] ?? 0), w: Number(size[1] ?? 1), h: Number(size[2] ?? 1),
-        net: net?.[2] ?? netNames.get(net?.[1]) ?? '',
-        drill: child(p,'drill')?.slice(1) ?? [], layers: child(p,'layers')?.slice(1).sort() ?? []};
+        net: net?.length === 2 ? netNames.get(net[1]) ?? net[1] : net?.[2] ?? netNames.get(net?.[1]) ?? '',
+        drill: child(p,'drill')?.slice(1) ?? [], layers: child(p,'layers')?.slice(1).sort() ?? [],
+        geometry: p.filter(n => Array.isArray(n) && ['roundrect_rratio','chamfer_ratio','chamfer','rect_delta','options','primitives'].includes(n[0])).sort((a,b)=>a[0].localeCompare(b[0]))};
     });
-    const pins = {};
+    const pins = Object.create(null);
     for (const pad of pads) {
       if (!pad.number) continue;
       (pins[pad.number] ??= []);
@@ -26,8 +27,8 @@ export function readBoard(text, file) {
     for (const nets of Object.values(pins)) nets.sort();
     const fields = Object.fromEntries(Object.entries(props).filter(([k]) => !['Reference','Value','Footprint','Sheetfile','Sheetname'].includes(k)).sort());
     parts.push({id: `${file}::${ref}`, ref, file,
-      sheet: props.Sheetname || '/', value: props.Value ?? children(fp, 'fp_text').find(p => p[1] === 'value')?.[2] ?? '',
-      footprint: fp[1], fields, pins, pads, x: Number(at[1] ?? 0), y: Number(at[2] ?? 0), angle: Number(at[3] ?? 0),
+      sheet: props.Sheetname || atom(fp,'sheetname','/'), value: props.Value ?? children(fp, 'fp_text').find(p => p[1] === 'value')?.[2] ?? '',
+      footprint: fp[1], attributes: child(fp,'attr')?.slice(1).sort() ?? [], fields, pins, pads, x: Number(at[1] ?? 0), y: Number(at[2] ?? 0), angle: Number(at[3] ?? 0),
       side: atom(fp,'layer'), uuid: atom(fp,'uuid',atom(fp,'tstamp')), path: atom(fp,'path')});
   }
   const counts = new Map();

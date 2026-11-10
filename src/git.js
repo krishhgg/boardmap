@@ -13,7 +13,7 @@ export function buildReport(repo,base,head,{board} = {}) {
   const files = sha => git(repo,['ls-tree','--full-tree','-r','--name-only','-z',sha]).split('\0').filter(p=>p.endsWith('.kicad_pcb'));
   const af = files(a), bf = files(b), all = [...new Set([...af,...bf])].sort();
   if (!all.length) throw new Error('No .kicad_pcb files at either revision. Schematic-only projects are not supported yet.');
-  const changed = new Set(git(repo,['diff','--name-only','--no-renames','-z',a,b]).split('\0'));
+  const changed = new Set(git(repo,['diff','--no-relative','--name-only','--no-renames','-z',a,b]).split('\0'));
   const selected = board ? all.filter(f=>f===board) : all.filter(f=>changed.has(f));
   if (board && !selected.length) throw new Error(`Board not found at either revision: ${board}`);
   const chosen = selected.length ? selected : all;

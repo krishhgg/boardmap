@@ -17,12 +17,14 @@ export function compare(before, after, metadata = {}) {
   const parts = [...new Set([...old.keys(),...fresh.keys()])].sort().map(id => {
     const a = old.get(id), b = fresh.get(id), changes = [];
     if (a && b) {
-      for (const key of ['value','footprint','side','sheet','x','y','angle','fields','pins']) {
+      for (const key of ['value','footprint','side','sheet','x','y','angle','attributes','fields','pins']) {
         const av = key === 'pins' ? stable(a[key]) : a[key], bv = key === 'pins' ? stable(b[key]) : b[key];
         if (!equal(av,bv)) changes.push({field:key,before:a[key],after:b[key]});
       }
       // Changes to pad geometry matter even when the footprint library name stays the same.
-      if (!equal(a.pads,b.pads) && !changes.some(c => c.field === 'pins')) changes.push({field:'pads',before:a.pads,after:b.pads});
+      const geometry = pads => pads.map(({net,...pad})=>pad).sort((x,y)=>JSON.stringify(x).localeCompare(JSON.stringify(y)));
+      const ag = geometry(a.pads), bg = geometry(b.pads);
+      if (!equal(ag,bg)) changes.push({field:'pads',before:ag,after:bg});
     }
     return {...(b ?? a), before:a ?? null, after:b ?? null, changes,
       status:!a?'added':!b?'removed':changes.length?'modified':'unchanged'};
@@ -45,7 +47,12 @@ export function compare(before, after, metadata = {}) {
   }
   const report = {schema:1,...metadata, parts,nets};
   const changed = parts.filter(p => p.status !== 'unchanged');
-  const affected = new Set(changed.flatMap(p => reach(report,p.id).ids));
+  const changedIds = new Set(changed.map(p=>p.id)), affected = new Set();
+  for (const net of Object.values(nets)) {
+    if (net.ground) continue;
+    const members = [...new Set([...net.before,...net.after])];
+    if (members.some(id=>changedIds.has(id))) for (const id of members) affected.add(id);
+  }
   for (const p of changed) affected.delete(p.id);
   report.stats = {parts:after.length, removed:parts.filter(p=>p.status==='removed').length,
     nets:Object.values(nets).filter(n=>n.after.length).length,

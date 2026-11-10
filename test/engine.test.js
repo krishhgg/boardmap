@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import {get} from 'node:http';
 import assert from 'node:assert/strict';
-import {readFileSync, mkdtempSync, writeFileSync, rmSync} from 'node:fs';
+import {readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {parse} from '../src/sexpr.js';
@@ -93,4 +93,43 @@ test('duplicate references match by UUID jointly across revisions',()=> {
 test('git reads work from repository subdirectories',()=> {
   const report = buildReport(new URL('../src',import.meta.url).pathname,'HEAD','HEAD');
   assert.ok(report.parts.length>10);
+});
+
+test('shape details, assembly flags and simultaneous geometry/net changes survive',()=> {
+  const text=fixture('corne/corne-cherry.kicad_pcb'), before=read(text);
+  for (const after of [text.replace('(roundrect_rratio 0.25)','(roundrect_rratio 0.5)'),text.replace('exclude_from_bom','dnp')]) {
+    assert.ok(compare(before,read(after)).stats.changed>0);
+  }
+  const custom=board(fp('U1','A').replace('(size 1 2)','(size 1 2) (primitives (gr_poly (pts (xy 0 0) (xy 1 0) (xy 0 1)) (width 0)))'));
+  assert.equal(compare(read(custom),read(custom.replace('(xy 1 0)','(xy 1.1 0)'))).stats.changed,1);
+  const a=read(board(fp('R1','A'))),b=read(board(fp('R1','B').replace('(size 1 2)','(size 2 2)')));
+  assert.deepEqual(compare(a,b).parts[0].changes.map(c=>c.field),['pins','pads']);
+});
+test('KiCad 10 name-only nets and lowercase sheet metadata are retained',()=> {
+  const text=board(fp('U1','VIN').replace('(net 1 "VIN")','(net "VIN")').slice(0,-1)+' (sheetname "/Power") (sheetfile "power.kicad_sch"))');
+  const parts=read(text);assert.deepEqual(parts[0].pins['1'],['VIN']);assert.equal(parts[0].sheet,'/Power');
+  assert.equal(compare(parts,parts).stats.nets,1);
+});
+test('named pads cannot collide with object prototype keys',()=> {
+  const part=read(board(fp('J1','A').replace('pad "1"','pad "constructor"')))[0];
+  assert.deepEqual(part.pins.constructor,['A']);
+  assert.deepEqual(read(board(fp('J1','A').replace('pad "1"','pad "__proto__"')))[0].pins.__proto__,['A']);
+});
+test('affected union scans shared nets and excludes every changed part',()=> {
+  const parts=Array.from({length:4000},(_,i)=>({...read(board(fp(`R${i}`,'VCC')))[0]}));
+  assert.equal(compare([],parts).stats.affected,0);
+  const after=structuredClone(parts);after[0].value='1k';
+  assert.equal(compare(parts,after).stats.affected,3999);
+});
+test('diff.relative cannot redirect changed-board selection from a subdirectory',()=> {
+  const dir=mkdtempSync(join(tmpdir(),'boardmap-relative-'));
+  try {
+    git(dir,['init','-q']);git(dir,['config','user.name','Test']);git(dir,['config','user.email','test@example.com']);git(dir,['config','diff.relative','true']);
+    mkdirSync(join(dir,'prototype'));
+    for(const file of ['main.kicad_pcb','prototype/main.kicad_pcb'])writeFileSync(join(dir,file),board(fp('R1','A')));
+    git(dir,['add','.']);git(dir,['commit','-qm','base']);const base=git(dir,['rev-parse','HEAD']).trim();
+    writeFileSync(join(dir,'prototype/main.kicad_pcb'),board(fp('R1','B')));git(dir,['add','.']);git(dir,['commit','-qm','head']);
+    const result=buildReport(join(dir,'prototype'),base,'HEAD');
+    assert.deepEqual(result.boards,['prototype/main.kicad_pcb']);assert.equal(result.stats.changed,1);
+  } finally {rmSync(dir,{recursive:true,force:true});}
 });
