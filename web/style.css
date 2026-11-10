@@ -634,6 +634,11 @@ select {
 .tile.dimmed {
   opacity: 0.25;
 }
+.navigation-hint {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 8px 0 0;
+}
 .legend {
   display: flex;
   align-items: center;

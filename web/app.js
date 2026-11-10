@@ -30,6 +30,9 @@ const state = {
   query: "",
   transitive: false,
   includeGround: false,
+  roving: { list: null, map: null },
+  inspectOrigin: null,
+  previewOrigin: null,
 };
 let report,
   parts,
@@ -40,6 +43,48 @@ const weight = (p) => Math.max(3, Object.keys(p.pins).length);
 const shortFile = (file) => file.split("/").at(-1).replace(".kicad_pcb", "");
 const mark = (p) =>
   ({ modified: "~", added: "+", removed: "−", unchanged: "·" })[p.status];
+// Native buttons form two linear roving groups, with one Tab stop per region.
+function syncRoving(root, region) {
+  const buttons = [...root.querySelectorAll("button")];
+  const current = buttons.find((button) =>
+    button.dataset.focusKey === state.roving[region]) ?? buttons[0];
+  for (const button of buttons) button.tabIndex = button === current ? 0 : -1;
+  state.roving[region] = current?.dataset.focusKey ?? null;
+}
+function wireRoving(root, region) {
+  root.addEventListener("focusin", (event) => {
+    const button = event.target.closest("button");
+    if (!button || !root.contains(button)) return;
+    state.roving[region] = button.dataset.focusKey;
+    syncRoving(root, region);
+  });
+  root.addEventListener("keydown", (event) => {
+    const keys = region === "map"
+      ? ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"]
+      : ["ArrowUp", "ArrowDown", "Home", "End"];
+    if (!keys.includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
+    const buttons = [...root.querySelectorAll("button")];
+    const index = buttons.indexOf(document.activeElement);
+    if (index < 0) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0
+      : event.key === "End" ? buttons.length - 1
+      : Math.max(0, Math.min(buttons.length - 1,
+          index + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1)));
+    buttons[next].focus();
+  });
+  if (region === "list") root.addEventListener("pointerleave", (event) => {
+    if (event.pointerType !== "touch" && !state.touchPreview) {
+      const focused = document.activeElement;
+      if (root.contains(focused) && focused.dataset.id) highlight(focused.dataset.id);
+      else resetImpact();
+    }
+  });
+}
+function partOrigin(node) {
+  return { region: $("part-list").contains(node) ? "list" : "map",
+    key: node.dataset.focusKey };
+}
 function matches(p) {
   return `${p.ref} ${p.value} ${p.footprint} ${Object.values(
     p.before?.pins ?? {},
@@ -150,6 +195,7 @@ function renderList() {
     );
     row.dataset.changeGroup = kind;
     row.dataset.id = p.id;
+    row.dataset.focusKey = `part:${p.id}`;
     row.classList.toggle("selected", state.selected === p.id);
     row.setAttribute(
       "aria-label",
@@ -209,6 +255,7 @@ ${orderedChanges(p)
         "empty",
       ),
     );
+  syncRoving(list, "list");
 }
 function wirePart(node, p) {
   let touchClick = false;
@@ -221,9 +268,6 @@ function wirePart(node, p) {
   node.onpointerenter = (event) => {
     if (event.pointerType !== "touch") highlight(p.id);
   };
-  node.onpointerleave = (event) => {
-    if (event.pointerType !== "touch" && !state.touchPreview) resetImpact();
-  };
   node.onfocus = () => {
     if (!touchClick) highlight(p.id);
   };
@@ -234,12 +278,13 @@ function wirePart(node, p) {
     if (touchClick && event.detail !== 0) {
       touchClick = false;
       if (state.touchPreview !== p.id) {
+        state.previewOrigin = partOrigin(node);
         state.touchPreview = p.id;
         highlight(p.id);
         return;
       }
     }
-    openDiff(p);
+    openDiff(p, partOrigin(node));
   };
 }
 // Balanced binary treemap. Split by cumulative pad count along the longer axis.
@@ -327,6 +372,10 @@ function tile(p, r, parent) {
   parent.append(node);
 }
 function renderMap() {
+  buildMap();
+  syncRoving($("tiles"), "map");
+}
+function buildMap() {
   const root = $("tiles");
   root.replaceChildren();
   $("connections").replaceChildren();
@@ -547,7 +596,7 @@ function highlight(id) {
   );
   if (state.touchPreview === id) {
     const open = el("button", `Open ${p.ref} diff`, "open-preview");
-    open.onclick = () => openDiff(p);
+    open.onclick = () => openDiff(p, state.previewOrigin);
     $("impact").append(open);
   }
 }
@@ -581,7 +630,8 @@ function format(value) {
   if (typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value);
 }
-function openDiff(p) {
+function openDiff(p, origin) {
+  state.inspectOrigin = origin ?? { region: "map", key: `part:${p.id}` };
   state.selected = p.id;
   resetImpact();
   renderList();
@@ -795,10 +845,10 @@ function closeDiff() {
   $("map-panel").hidden = false;
   renderMap();
   resetImpact();
-  const target = [
-    ...$("tiles").querySelectorAll(".tile"),
-    ...$("part-list").children,
-  ].find((n) => n.dataset.id === id);
+  const origin = state.inspectOrigin;
+  const root = origin?.region === "list" ? $("part-list") : $("tiles");
+  const target = [...root.querySelectorAll("button")]
+    .find((n) => n.dataset.focusKey === origin?.key);
   (target ?? $("map-tab")).focus();
 }
 function padPosition(part, pad) {
@@ -1060,8 +1110,21 @@ async function init() {
         renderMap();
         resetImpact();
       };
+    wireRoving($("part-list"), "list");
+    wireRoving($("tiles"), "map");
+    // Reset only after leaving the canvas, not when crossing tile gutters.
+    $("canvas").addEventListener("pointerleave", (event) => {
+      if (event.pointerType !== "touch" && !state.touchPreview &&
+          !$("tiles").contains(document.activeElement)) resetImpact();
+    });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && state.selected) closeDiff();
+      if (e.key !== "Escape") return;
+      if (state.selected) closeDiff();
+      else resetImpact();
+    });
+    document.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "touch" && state.touchPreview &&
+          !event.target.closest(".tile, .part-row, .open-preview")) resetImpact();
     });
     resize = new ResizeObserver(() => {
       const box = $("canvas").getBoundingClientRect(),

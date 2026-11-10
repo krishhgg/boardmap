@@ -48,11 +48,10 @@
               only</label
             ><span id="list-count"></span>
           </div>
-          <div id="part-list" aria-label="Components"></div>
+          <div id="part-list" role="group" aria-label="Components" aria-describedby="list-help"></div>
         </div>
         <div class="aside-foot">
-          Focus or hover to trace shared nets.<br />Select a component to
-          inspect its diff.
+          <span id="list-help">↑ ↓, Home / End move through components.</span><br />Enter / Space inspect. Tab moves to Reach.
         </div>
       </aside>
       <main>
@@ -79,10 +78,11 @@
         <div id="impact" aria-live="polite"></div>
         <div id="map-panel">
           <div id="canvas">
-            <div id="tiles"></div>
+            <div id="tiles" role="group" aria-label="Map controls" aria-describedby="map-help"></div>
             <svg id="connections" aria-hidden="true"></svg>
             <div id="map-empty" hidden>No components match this search.</div>
           </div>
+          <p id="map-help" class="navigation-hint">Map keyboard: arrows move through controls in list order · Home / End jump · Enter / Space open</p>
           <div class="legend">
             <span><i class="electrical"></i>Electrical</span
             ><span><i class="modified"></i>Metadata</span
