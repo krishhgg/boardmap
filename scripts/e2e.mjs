@@ -43,6 +43,7 @@ try {
   }
   await capture('diff');
   await page.keyboard.press('Escape');await page.locator('#map-panel').waitFor({state:'visible'});
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   assert.ok(await page.evaluate(()=>document.activeElement.classList.contains('tile')),'closing diff restores map focus');
   for(const status of ['modified','added','removed']) {
     const row=page.locator(`.part-row.${status}`).first();

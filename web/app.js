@@ -243,7 +243,11 @@ async function init() {
     $('ground').onchange=e=>{state.includeGround=e.target.checked;if(state.hover) highlight(state.hover);};
     for (const [id,view] of [['map-tab','map'],['board-tab','board']]) $(id).onclick=()=>{state.view=view;$(id).classList.add('active');$(id==='map-tab'?'board-tab':'map-tab').classList.remove('active');if(state.selected) closeDiff();renderMap();resetImpact();};
     document.addEventListener('keydown',e=>{if(e.key==='Escape' && state.selected) closeDiff();});
-    resize=new ResizeObserver(()=>{if(!state.selected){renderMap();resetImpact();}});resize.observe($('canvas'));
+    let mapSize='';
+    resize=new ResizeObserver(()=>{
+      const box=$('canvas').getBoundingClientRect(),size=`${box.width}:${box.height}`;
+      if(!state.selected && box.width>0 && box.height>0 && size!==mapSize){mapSize=size;renderMap();resetImpact();}
+    });resize.observe($('canvas'));
     breadcrumb();renderList();renderMap();
   } catch(error) {$('project').textContent=`Could not load this review. ${error.message}. Restart boardmap and reload this page.`;}
 }
