@@ -209,6 +209,25 @@ try {
   if (values.fixture && !values.removed) {
     assert.equal(
       await page
+        .locator('.region [data-selected="true"][data-pad=""][data-changed="true"]')
+        .count(),
+      2,
+      "changed mounting hole highlights in both revisions",
+    );
+    for (const width of [720, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const property = page.getByRole("cell", {
+        name: "Property: ManufacturerPartNumber",
+        exact: true,
+      });
+      assert.ok(
+        await property.evaluate((cell) => cell.scrollWidth <= cell.clientWidth),
+        "long property keys wrap within their column",
+      );
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    assert.equal(
+      await page
         .locator(
           '.region [data-selected="true"][data-pad="1"][data-changed="false"]',
         )
@@ -385,6 +404,15 @@ try {
   await page.locator("#map-tab").click();
   for (const width of [720, 800, 390]) {
     await page.setViewportSize({ width, height: 844 });
+    if (report.sheetRenames?.length) {
+      await page.locator(".sheet-renames summary").click();
+      const bounds = await page.locator(".sheet-renames ul").boundingBox();
+      assert.ok(
+        bounds.x >= 0 && bounds.x + bounds.width <= width,
+        "sheet rename popover stays inside the viewport",
+      );
+      await page.locator(".sheet-renames summary").click();
+    }
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,

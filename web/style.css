@@ -156,6 +156,8 @@ header {
   border: 1px solid var(--line);
   z-index: 10;
   width: min(480px, 80vw);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .sheet-renames li {
   margin: 4px 0;
@@ -786,7 +788,7 @@ footer {
 .semantic td:first-child,
 .semantic th:first-child {
   width: 28%;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   word-break: normal;
 }
 .semantic td:nth-child(2) {

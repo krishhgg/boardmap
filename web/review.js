@@ -88,10 +88,7 @@ export function changedPadNumbers(part) {
     const a = padGroups(geometry.before),
       b = padGroups(geometry.after);
     for (const number of new Set([...a.keys(), ...b.keys()]))
-      if (
-        number &&
-        JSON.stringify(a.get(number)) !== JSON.stringify(b.get(number))
-      )
+      if (JSON.stringify(a.get(number)) !== JSON.stringify(b.get(number)))
         numbers.add(number);
   }
   return numbers;

@@ -84,6 +84,17 @@ test("removing the last electrical pad remains an electrical change", () => {
   assert.ok(isElectrical(p));
 });
 
+test("mechanical pad changes remain visible in the region highlight", () => {
+  const p = part([
+    {
+      field: "pads",
+      before: [{ number: "", drill: ["1"] }],
+      after: [{ number: "", drill: ["1.4"] }],
+    },
+  ]);
+  assert.ok(changedPadNumbers(p).has(""));
+});
+
 test("population transitions and both-present part identifiers outrank descriptive fields", () => {
   for (const [before, after] of [
     [{ DNP: "DNP" }, { DNP: "" }],

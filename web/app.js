@@ -629,7 +629,7 @@ function openDiff(p) {
             )
             .join(
               ", ",
-            )}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount} numbered ${padCount === 1 ? "pad highlighted" : "pads highlighted"}.`
+            )}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount} ${padCount === 1 ? "pad change" : "pad changes"} highlighted.`
         : p.status === "unchanged"
           ? "No semantic changes in this component."
           : `${p.status === "added" ? "Added in head" : "Removed from head"}. All present pads highlighted.`,
@@ -783,7 +783,7 @@ function openDiff(p) {
 function inspectorImpact(p) {
   impact(
     `${p.ref} · ${reach(report, p.id, state).ids.length} ${state.transitive ? "transitively reachable parts" : "connected parts"}`,
-    `Numbered pad connectivity and footprint properties, compared across base and head. White pads are unchanged; red and green pads changed. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
+    `Pad geometry, connectivity and footprint properties, compared across base and head. White pads are unchanged; red and green pads changed. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
   );
 }
 function closeDiff() {
