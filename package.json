@@ -1,0 +1,10 @@
+{
+  "name": "boardmap",
+  "version": "0.1.0",
+  "description": "See what a KiCad board change touches",
+  "type": "module",
+  "license": "MIT",
+  "bin": {"boardmap": "bin/boardmap.js"},
+  "engines": {"node": ">=22"},
+  "scripts": {"test": "node --test", "start": "node bin/boardmap.js"}
+}
