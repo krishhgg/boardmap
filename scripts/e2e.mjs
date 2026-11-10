@@ -113,6 +113,23 @@ try {
       "5V regulator",
       "3V3 regulator",
     ]);
+    const pad = page
+      .locator(".semantic tr")
+      .filter({
+        has: page.getByRole("cell", {
+          name: "Pad 2 local geometry",
+          exact: true,
+        }),
+      });
+    const cells = await pad.locator("td").allTextContents();
+    assert.match(cells[1], /drill \["0\.8"\]/);
+    assert.match(cells[2], /drill \["1\.2"\]/);
+    assert.equal(
+      await page
+        .getByRole("cell", { name: "Pad 1 local geometry", exact: true })
+        .count(),
+      0,
+    );
   }
   await capture("diff");
   await page.keyboard.press("Escape");
@@ -129,6 +146,23 @@ try {
     ),
     "closing diff restores map focus",
   );
+  const focusedId = await page.evaluate(
+    () => document.activeElement.dataset.id,
+  );
+  for (const height of [1100, 1000]) {
+    await page.setViewportSize({ width: 1440, height });
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    assert.equal(
+      await page.evaluate(() => document.activeElement.dataset.id),
+      focusedId,
+      "height-only resize retains map focus",
+    );
+  }
   if (report.parts.some((p) => p.status === "unchanged")) {
     for (const width of [1100, 390, 1440]) {
       const unchanged = page.locator(".tile.unchanged").first(),

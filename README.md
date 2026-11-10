@@ -4,7 +4,7 @@ See what a PCB change touches.
 
 A local, whole-design map for KiCad git reviews. Hover a part to trace its shared nets. Click it to inspect value, footprint, manufacturing fields, and pin-net changes, with before/after pad regions.
 
-![Corne PR review, map to electrical reach to part diff](docs/media/boardmap-demo.gif)
+![Corne PR review, map to electrical reach to part diff](https://raw.githubusercontent.com/krishhgg/boardmap/7db8a5ae290a2bf6c27f6a4d10f0da4b73727b0e/docs/media/boardmap-demo.gif)
 
 ## Run it
 
@@ -37,7 +37,7 @@ By default, it includes every component in boards whose files changed. If no boa
 
 The stats count head parts and nets, sheet groups across both revisions, and changed components including removals. Affected means unchanged direct neighbors of changed parts, excluding ground, across either revision. It is independent of the current hover and reach controls. Stable sheet UUIDs identify label renames. Boardmap reports these separately and normalizes old hierarchical net prefixes only when the mapping is unambiguous and does not merge distinct historical nets. Real rewires remain in the pin diff. Footprint rotations compare pad angles relative to the footprint, so rotation alone does not create a pad dump.
 
-![Shared-net reach on the real Corne PR](docs/media/corne/reach.png)
+![Shared-net reach on the real Corne PR](https://raw.githubusercontent.com/krishhgg/boardmap/7db8a5ae290a2bf6c27f6a4d10f0da4b73727b0e/docs/media/corne/reach.png)
 
 ## Try the real PRs
 

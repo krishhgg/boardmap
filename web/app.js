@@ -201,6 +201,7 @@ function position(node, r, gap = 2) {
 function tile(p, r, parent) {
   const node = el("button", undefined, `tile ${p.status}`);
   node.dataset.id = p.id;
+  node.dataset.focusKey = `part:${p.id}`;
   position(node, r);
   node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}`);
   node.title = `${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
@@ -263,6 +264,7 @@ function renderMap() {
       const node = el("div", undefined, "group");
       position(node, r, 3);
       const title = el("button", undefined, "group-title");
+      title.dataset.focusKey = `group:${group.key}`;
       title.append(
         el(
           "span",
@@ -318,6 +320,7 @@ function renderBoard(shown, w, h) {
     chooser.append(el("p", "Choose a board to view its physical layout."));
     for (const file of files) {
       const button = el("button", file);
+      button.dataset.focusKey = `board:${file}`;
       button.onclick = () => setScope({ file });
       chooser.append(button);
     }
@@ -779,9 +782,17 @@ async function init() {
         box.height > 0 &&
         size !== mapSize
       ) {
+        const active = document.activeElement;
+        const focusKey = $("tiles").contains(active)
+          ? active.dataset.focusKey
+          : null;
         mapSize = size;
         renderMap();
         resetImpact();
+        if (focusKey)
+          [...$("tiles").querySelectorAll("button")]
+            .find((button) => button.dataset.focusKey === focusKey)
+            ?.focus();
       }
     });
     resize.observe($("canvas"));
