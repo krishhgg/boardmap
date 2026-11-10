@@ -54,7 +54,10 @@ test("real legacy board features migrate metadata without hiding a population ch
 test("legacy migration guards preserve unknown parts and independent electrical edits", () => {
   const a = assemblyBoard("before").find((p) => p.ref === "J4");
   const b = assemblyBoard("after").find((p) => p.ref === "J4");
-  const reportPart = (a, b) => compare([a], [b]).parts[0];
+  const reportPart = (a, b) => {
+    const peer = { ...a, ref: "PEER" };
+    return compare([a, peer], [b, peer]).parts.find((p) => p.ref === a.ref);
+  };
   const ordinaryA = { ...a, footprint: "Custom:OrdinaryPart" };
   const ordinaryB = { ...b, footprint: "Custom:OrdinaryPart" };
   assert.equal(changeGroup(reportPart(ordinaryA, ordinaryB)), "Electrical");

@@ -1,0 +1,58 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { readBoard } from "../src/board.js";
+import { compare, reach } from "../src/compare.js";
+
+const file = "main.kicad_pcb";
+const read = (text) => readBoard(text, file);
+const parts = (...nets) => read(`(kicad_pcb ${nets.map((net, i) =>
+  `(footprint "R" (property "Reference" "R${i}")
+    (pad "1" smd rect (net "${net}")))`).join(" ")})`);
+
+test("a real Corne rail label rename preserves every pin and load", () => {
+  const text = readFileSync(new URL("fixtures/corne/corne-cherry.kicad_pcb", import.meta.url), "utf8");
+  const before = read(text), after = read(text.replaceAll('"+5V"', '"VSYS"'));
+  const report = compare(before, after);
+  assert.equal(report.stats.changed, 0);
+  assert.deepEqual(report.netRenames, [{ file, before: "+5V", after: "VSYS" }]);
+  assert.deepEqual(report.nets[`${file}::VSYS`].before, report.nets[`${file}::VSYS`].after);
+  assert.deepEqual(reach(report, `${file}::U2`).ids.sort(), reach(compare(before, before), `${file}::U2`).ids.sort());
+  assert.ok(Object.values(report.parts.find((p) => p.ref === "U2").before.pins).flat().includes("+5V"));
+});
+
+test("renaming a net while moving a pin cannot conceal the rewire", () => {
+  const report = compare(parts("A", "A", "B"), parts("VSYS", "B", "B"));
+  assert.deepEqual(report.netRenames, []);
+  const moved = report.parts.find((p) => p.ref === "R1");
+  assert.deepEqual(moved.changes.find((c) => c.field === "pins"), {
+    field: "pins", before: { 1: ["A"] }, after: { 1: ["B"] },
+  });
+});
+
+test("added and removed loads participate in rename identity", () => {
+  for (const [before, after] of [
+    [parts("A"), parts("VSYS", "VSYS")],
+    [parts("A", "A"), parts("VSYS")],
+  ]) {
+    const report = compare(before, after);
+    assert.deepEqual(report.netRenames, []);
+    assert.ok(report.parts.find((p) => p.ref === "R0").changes.some((c) => c.field === "pins"));
+  }
+});
+
+test("pin identity, existing names, ambiguity and boards guard label matching", () => {
+  const before = parts("A"), moved = structuredClone(before);
+  moved[0].pins = { 2: ["VSYS"] };
+  assert.deepEqual(compare(before, moved).netRenames, []);
+  assert.deepEqual(compare(parts("A", "B"), parts("B", "A")).netRenames, []);
+  const ambiguous = structuredClone(before), target = structuredClone(before);
+  ambiguous[0].pins[1] = ["A", "B"];
+  target[0].pins[1] = ["VSYS", "VIN"];
+  assert.deepEqual(compare(ambiguous, target).netRenames, []);
+  const other = structuredClone(target);
+  other[0].file = "other.kicad_pcb";
+  assert.deepEqual(compare(before, other).netRenames, []);
+  const renamed = parts("VSYS");
+  assert.deepEqual(compare(before, renamed).netRenames, [{ file, before: "A", after: "VSYS" }]);
+});

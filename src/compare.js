@@ -1,4 +1,4 @@
-import { sameSheet, sheetRenames, padGeometry } from "./normalize.js";
+import { sameSheet, sheetRenames, netLabelRenames, padGeometry } from "./normalize.js";
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const stable = (object) =>
   Object.fromEntries(
@@ -31,7 +31,9 @@ export function compare(before, after, metadata = {}) {
   after = normalize(after);
   const old = new Map(before.map((p) => [p.id, p])),
     fresh = new Map(after.map((p) => [p.id, p]));
-  const { renames, netName } = sheetRenames(old, fresh);
+  const sheets = sheetRenames(old, fresh),
+    labels = netLabelRenames(old, fresh, sheets.netName),
+    { netName } = labels;
   const pins = (p) =>
     stable(
       Object.fromEntries(
@@ -122,7 +124,11 @@ export function compare(before, after, metadata = {}) {
           ? "unchanged"
           : "modified";
   }
-  const report = { schema: 1, ...metadata, parts, nets, sheetRenames: renames };
+  const report = {
+    schema: 1, ...metadata, parts, nets,
+    sheetRenames: sheets.renames,
+    netRenames: labels.renames,
+  };
   const changed = parts.filter((p) => p.status !== "unchanged");
   const changedIds = new Set(changed.map((p) => p.id)),
     affected = new Set();
