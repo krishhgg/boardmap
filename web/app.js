@@ -1305,14 +1305,23 @@ async function init() {
         : `${report.boards.length} boards · ${report.boards.map(shortFile).join(" / ")}`;
     $("project").title = report.boards.join("\n");
     $("change-count").textContent = report.stats.changed;
-    if (report.sheetRenames?.length) {
+    const sheetLabels = report.sheetRenames ?? [],
+      netLabels = report.netRenames ?? [];
+    if (sheetLabels.length || netLabels.length) {
       const details = el("details", undefined, "sheet-renames");
+      const counts = [];
+      if (sheetLabels.length) counts.push(`${sheetLabels.length} sheet`);
+      if (netLabels.length) counts.push(`${netLabels.length} net`);
       details.append(
-        el("summary", `${report.sheetRenames.length} sheet labels renamed`),
+        el("summary", `${counts.join(" · ")} ${sheetLabels.length + netLabels.length === 1 ? "label" : "labels"} renamed`),
       );
       const list = el("ul");
-      for (const rename of report.sheetRenames)
-        list.append(el("li", `${rename.before} → ${rename.after}`));
+      for (const [kind, renames] of [["Sheet", sheetLabels], ["Net", netLabels]])
+        for (const rename of renames) {
+          const row = el("li", `${kind}: ${rename.before} → ${rename.after}`);
+          row.title = rename.file;
+          list.append(row);
+        }
       details.append(list);
       $("project").after(details);
     }

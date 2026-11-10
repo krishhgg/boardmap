@@ -79,6 +79,58 @@ export function sheetRenames(before, after) {
     netName: (file, name) => rewrite(file, name).name,
   };
 }
+// Only a unique, complete pin-for-pin match proves a standalone label rename.
+// Added and removed components participate, so changing a net's loads never matches.
+export function netLabelRenames(before, after, sheetName) {
+  const index = (parts, nameOf) => {
+    const files = new Map();
+    for (const part of parts.values()) {
+      if (!files.has(part.file)) files.set(part.file, new Map());
+      const nets = files.get(part.file);
+      for (const [pin, names] of Object.entries(part.pins))
+        for (const raw of names.filter(Boolean)) {
+          const name = nameOf(part.file, raw);
+          if (!nets.has(name)) nets.set(name, { raw, members: new Set() });
+          nets.get(name).members.add(JSON.stringify([part.id, pin]));
+        }
+    }
+    return files;
+  };
+  const old = index(before, sheetName),
+    fresh = index(after, (_, name) => name),
+    mappings = new Map(),
+    renames = [];
+  const candidates = (nets, other) => {
+    const signatures = new Map();
+    for (const [name, entry] of nets) {
+      if (other.has(name)) continue;
+      const signature = JSON.stringify([...entry.members].sort());
+      if (!signatures.has(signature)) signatures.set(signature, []);
+      signatures.get(signature).push({ name, raw: entry.raw });
+    }
+    return signatures;
+  };
+  for (const [file, oldNets] of old) {
+    const newNets = fresh.get(file) ?? new Map(),
+      oldCandidates = candidates(oldNets, newNets),
+      newCandidates = candidates(newNets, oldNets),
+      names = new Map();
+    for (const [signature, sources] of oldCandidates) {
+      const targets = newCandidates.get(signature);
+      if (sources.length !== 1 || targets?.length !== 1) continue;
+      names.set(sources[0].name, targets[0].name);
+      renames.push({ file, before: sources[0].raw, after: targets[0].name });
+    }
+    mappings.set(file, names);
+  }
+  return {
+    renames,
+    netName: (file, raw) => {
+      const name = sheetName(file, raw);
+      return mappings.get(file)?.get(name) ?? name;
+    },
+  };
+}
 export function padGeometry(part) {
   return part.pads
     .map(({ net, ...pad }) => ({

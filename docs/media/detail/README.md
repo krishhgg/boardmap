@@ -1,5 +1,7 @@
 # Named reach and detailed review proof
 
+These captures record the revision before standalone net-label normalization. Their HackRF counts are historical. Current counts are 105 electrical, 389 changed and 58 unchanged affected; see [net-label proof](../net-labels/README.md).
+
 Actual Chromium captures from pinned HackRF and Corne git objects. The UI reads the full boards; none of these reports substitutes synthetic component data.
 
 | Capture | Viewport | Evidence |

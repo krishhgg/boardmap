@@ -1,6 +1,6 @@
 # Instrument UI captures
 
-These gallery captures record the earlier instrument revision. The hero GIF and `demo-frames/` are refreshed with the current UI; the latest drilled-sheet and visible-return captures are in [continuity](../continuity/README.md). Each run starts an ephemeral loopback server and closes it afterward. No fixture data replaces the boards in these images.
+These gallery captures record the earlier instrument revision. The hero GIF and `demo-frames/` are refreshed with the current UI; drilled-sheet and visible-return captures are in [continuity](../continuity/README.md). Current net-label normalization and counts are shown in [net-label proof](../net-labels/README.md). Each run starts an ephemeral loopback server and closes it afterward. No fixture data replaces the boards in these images.
 
 | Capture                                           | Viewport | State                                                                    |
 | ------------------------------------------------- | -------- | ------------------------------------------------------------------------ |

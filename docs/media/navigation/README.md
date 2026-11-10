@@ -1,5 +1,7 @@
 # Navigation and inspection proof
 
+These captures record the revision before standalone net-label normalization. Their HackRF counts are historical. Current counts are 105 electrical, 389 changed and 58 unchanged affected; see [net-label proof](../net-labels/README.md).
+
 Six PNGs captured from the running UI in Chromium. The reports use the pinned real HackRF and Corne revisions below. These captures contain no substituted fixture data.
 
 | File                        | Viewport   | State                                                                                                                                                  |

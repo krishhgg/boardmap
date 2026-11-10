@@ -1,5 +1,7 @@
 # Readable sheets and visible return selection
 
+These captures record the revision before standalone net-label normalization. Their HackRF counts are historical. Current counts are 105 electrical, 389 changed and 58 unchanged affected; see [net-label proof](../net-labels/README.md).
+
 These are actual Chromium captures of the pinned HackRF and Corne comparisons. No fixture data replaces the designs. The changes preserve graph semantics, rail loads and report counts.
 
 | Capture | Viewport | State |

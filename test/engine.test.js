@@ -196,8 +196,8 @@ test("shape details, assembly flags and simultaneous geometry/net changes surviv
       .changed,
     1,
   );
-  const a = read(board(fp("R1", "A"))),
-    b = read(board(fp("R1", "B").replace("(size 1 2)", "(size 2 2)")));
+  const a = read(board(fp("R1", "A"), fp("R2", "A"))),
+    b = read(board(fp("R1", "B").replace("(size 1 2)", "(size 2 2)"), fp("R2", "A")));
   assert.deepEqual(
     compare(a, b).parts[0].changes.map((c) => c.field),
     ["pins", "pads"],
@@ -246,7 +246,7 @@ test("diff.relative cannot redirect changed-board selection from a subdirectory"
     git(dir, ["add", "."]);
     git(dir, ["commit", "-qm", "base"]);
     const base = git(dir, ["rev-parse", "HEAD"]).trim();
-    writeFileSync(join(dir, "prototype/main.kicad_pcb"), board(fp("R1", "B")));
+    writeFileSync(join(dir, "prototype/main.kicad_pcb"), board(fp("R1", "B", "1k")));
     git(dir, ["add", "."]);
     git(dir, ["commit", "-qm", "head"]);
     const result = buildReport(join(dir, "prototype"), base, "HEAD");
@@ -263,14 +263,16 @@ test("official KiCad 10 QA board retains real connectivity", () => {
   assert.ok(parts.some((p) => Object.values(p.pins).flat().includes("VIN")));
 });
 test("stable sheet UUID renames normalize prefixes without hiding actual rewires", () => {
-  const a = read(board(fp("R1", "/Power/VIN"))),
+  const a = read(board(fp("R1", "/Power/VIN"), fp("R2", "/Power/VIN"))),
     b = structuredClone(a);
-  a[0].path = "/sheet-uuid/part-uuid";
-  a[0].sheet = "Power";
-  b[0].path = a[0].path;
-  b[0].sheet = "power";
-  b[0].pins["1"] = ["/power/VIN"];
-  b[0].pads[0].net = "/power/VIN";
+  for (let i = 0; i < a.length; i++) {
+    a[i].path = `/sheet-uuid/part${i}`;
+    a[i].sheet = "Power";
+    b[i].path = a[i].path;
+    b[i].sheet = "power";
+    b[i].pins["1"] = ["/power/VIN"];
+    b[i].pads[0].net = "/power/VIN";
+  }
   let report = compare(a, b);
   assert.equal(report.stats.changed, 0);
   assert.equal(report.sheetRenames.length, 1);
@@ -309,10 +311,10 @@ test("Corne left and right ground rails are excluded symmetrically", () => {
 });
 test("unchanged child sheet prefixes guard against a broader rename", () => {
   const a = read(
-      board(fp("R1", "/Power/VIN"), fp("R2", "/Power/Monitor/SENSE")),
+      board(fp("R1", "/Power/VIN"), fp("R2", "/Power/Monitor/SENSE"), fp("R3", "/Power/Monitor/SENSE")),
     ),
     b = structuredClone(a);
-  for (const [i, sheet] of ["Power", "Power/Monitor"].entries()) {
+  for (const [i, sheet] of ["Power", "Power/Monitor", "Power/Monitor"].entries()) {
     a[i].sheet = sheet;
     b[i].sheet = sheet;
     a[i].path = `/sheet${i}/part${i}`;
@@ -345,10 +347,10 @@ test("sheet prefix renames never merge distinct historical nets", () => {
 });
 test("unmatched and removed sheet labels still guard narrower prefixes", () => {
   const a = read(
-      board(fp("R1", "/Power/VIN"), fp("R2", "/Power/Monitor/SENSE")),
+      board(fp("R1", "/Power/VIN"), fp("R2", "/Power/Monitor/SENSE"), fp("R3", "/Power/Monitor/SENSE")),
     ),
     b = structuredClone(a);
-  for (const [i, sheet] of ["Power", "Power/Monitor"].entries()) {
+  for (const [i, sheet] of ["Power", "Power/Monitor", "Power/Monitor"].entries()) {
     a[i].sheet = sheet;
     b[i].sheet = sheet;
     a[i].path = `/sheet${i}/part${i}`;
