@@ -330,7 +330,16 @@ ${orderedChanges(p)
   syncRoving(list, "list");
 }
 function wirePart(node, p) {
-  let touchClick = false;
+  let touchClick = false,
+    retargetPoint;
+  const waitForRest = (event) => {
+    cancelHoverRetarget();
+    retargetPoint = { x: event.clientX, y: event.clientY };
+    hoverRetarget = setTimeout(() => {
+      retargetPoint = null;
+      highlight(p.id);
+    }, 160);
+  };
   node.onpointerdown = (event) => {
     touchClick = event.pointerType === "touch";
   };
@@ -341,10 +350,22 @@ function wirePart(node, p) {
     if (event.pointerType === "touch") return;
     cancelHoverRetarget();
     if (node.classList.contains("tile") && state.hover && state.hover !== p.id)
-      hoverRetarget = setTimeout(() => highlight(p.id), 160);
+      waitForRest(event);
     else highlight(p.id);
   };
-  node.onpointerleave = cancelHoverRetarget;
+  node.onpointermove = (event) => {
+    if (
+      retargetPoint &&
+      event.pointerType !== "touch" &&
+      state.hover !== p.id &&
+      Math.hypot(event.clientX - retargetPoint.x, event.clientY - retargetPoint.y) > 4
+    )
+      waitForRest(event);
+  };
+  node.onpointerleave = () => {
+    retargetPoint = null;
+    cancelHoverRetarget();
+  };
   node.onfocus = () => {
     if (!touchClick && node.matches(":focus-visible")) highlight(p.id);
   };
@@ -1342,11 +1363,10 @@ async function init() {
       };
     wireRoving($("part-list"), "list");
     wireRoving($("tiles"), "map");
-    // Reset only after leaving the canvas, not when crossing tile gutters.
-    for (const node of [$("canvas"), $("impact")]) {
-      node.addEventListener("pointerenter", cancelPreviewReset);
-      node.addEventListener("pointerleave", schedulePreviewReset);
-    }
+    // The instrument includes the gap between the map and its reach readout.
+    const instrument = document.querySelector("main");
+    instrument.addEventListener("pointerenter", cancelPreviewReset);
+    instrument.addEventListener("pointerleave", schedulePreviewReset);
     $("impact").addEventListener("focusin", cancelPreviewReset);
     $("impact").addEventListener("focusout", (event) => {
       if (!event.relatedTarget?.closest("#impact, #tiles, #part-list")) resetImpact();

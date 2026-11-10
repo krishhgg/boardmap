@@ -489,6 +489,35 @@ try {
     await page.setViewportSize(viewport);
     await hoverPart(page.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`));
     await assertReadoutFits(page);
+    if (viewport.width === 1024 &&
+        report.head === "3bdc5547004c8244de5f37104410c363854e5634" &&
+        report.boards.includes("hardware/hackrf-one/hackrf-one.kicad_pcb")) {
+      const source = await tile.boundingBox();
+      const destination = await page.locator(".net-reach-more .net-reach-list").boundingBox();
+      const start = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+      const end = { x: destination.x + destination.width / 2, y: destination.y + destination.height / 2 };
+      await page.mouse.move(start.x, start.y);
+      const began = Date.now();
+      for (let step = 1; step <= 30; step++) {
+        const t = step / 30, eased = (1 - Math.cos(Math.PI * t)) / 2;
+        await page.mouse.move(start.x + (end.x - start.x) * eased,
+          start.y + (end.y - start.y) * eased);
+        await page.waitForTimeout(Math.max(0, began + 1300 * t - Date.now()));
+      }
+      assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), candidate.id,
+        "a slow accelerated pointer path to the net list preserves the source");
+      const canvas = await page.locator("#canvas").boundingBox();
+      await page.mouse.move(end.x, canvas.y - 6);
+      await page.waitForTimeout(200);
+      assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), candidate.id,
+        "the gap between the map and readout belongs to the same hover area");
+      const other = report.parts.find((p) => p.ref === "U24");
+      await page.locator(`.tile[data-id=${JSON.stringify(other.id)}]`).hover();
+      await page.waitForTimeout(220);
+      assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), other.id,
+        "resting on a different component still retargets");
+      await hoverPart(tile);
+    }
     if ([1280, 1024].includes(viewport.width)) await capture(`readout-${viewport.width}`);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
