@@ -4,7 +4,7 @@ See what a PCB change touches.
 
 A local, whole-design map for KiCad git reviews. Hover a part to trace its shared nets. Click it to inspect value, footprint, manufacturing fields, and pin-net changes, with before/after pad regions.
 
-![Corne PR review, map to electrical reach to part diff](https://raw.githubusercontent.com/krishhgg/boardmap/eaf8111462563f07552786e5129b4a4844fb1393/docs/media/instrument/boardmap-demo.gif)
+![Corne PR review, map to electrical reach to part diff](https://raw.githubusercontent.com/krishhgg/boardmap/f945fe2dd76a78be4545ab2d6afd38da5ff157b6/docs/media/instrument/boardmap-demo.gif)
 
 ## Run it
 
@@ -36,9 +36,9 @@ By default, it includes every component in boards whose files changed. If no boa
 - Click a sheet to zoom, use breadcrumbs to return, or switch to component centers in Board layout. Each board has its own chooser when a repository contains multiple designs.
 - Click a part for its semantic diff and local pad regions. Press Escape or Back to map to return. Search by reference, value, footprint, or net. The sidebar follows the current board or sheet. Electrical edits come first, sorted by rewired-pin count and then natural reference order, followed by Removed, Added and Metadata groups. Zero-pad artwork stays in Metadata with its original added or removed status. Pin rows lead the inspector; changed property keys have individual rows, and changed pad geometry is available in a disclosure. The Changed only filter does not hide unchanged context in the map.
 
-The header counts head parts and nets, electrical changes and all changed components including removals. Electrical changes include parts with pin, pad, value or footprint edits, DNP population transitions, replacements of both-present MPN / Part Number / Manufacturer Part Number identifiers, and added or removed parts with pads, except explicitly flagged unconnected fiducials. A bounded legacy DNP-field migration on verified board features stays in Metadata; BOM exclusion never defines population state. See [assembly priority](docs/assembly-priority.md). Filling an empty supplier or descriptive field alone stays in Metadata. The in-view total includes removed components and names their count separately. Affected means unchanged direct neighbors of changed parts, excluding ground, across either revision. It is independent of the current hover and reach controls. Stable sheet UUIDs identify label renames. Boardmap reports these separately and normalizes old hierarchical net prefixes only when the mapping is unambiguous and does not merge distinct historical nets. Real rewires remain in the pin diff. Footprint rotations compare pad angles relative to the footprint, so rotation alone does not create a pad dump.
+The header counts head parts and nets, electrical changes and all changed components including removals. Electrical changes include parts with pin, pad, value or footprint edits, DNP population transitions, replacements of both-present MPN / Part Number / Manufacturer Part Number identifiers, and added or removed parts with pads, except explicitly flagged unconnected fiducials. A bounded legacy DNP-field migration on verified board features stays in Metadata; BOM exclusion never defines population state. See [assembly priority](https://github.com/krishhgg/boardmap/blob/f945fe2dd76a78be4545ab2d6afd38da5ff157b6/docs/assembly-priority.md). Filling an empty supplier or descriptive field alone stays in Metadata. The in-view total includes removed components and names their count separately. Affected means unchanged direct neighbors of changed parts, excluding ground, across either revision. It is independent of the current hover and reach controls. Stable sheet UUIDs identify label renames. Boardmap reports these separately and normalizes old hierarchical net prefixes only when the mapping is unambiguous and does not merge distinct historical nets. Real rewires remain in the pin diff. Footprint rotations compare pad angles relative to the footprint, so rotation alone does not create a pad dump.
 
-![Shared-net reach on the real Corne PR](https://raw.githubusercontent.com/krishhgg/boardmap/eaf8111462563f07552786e5129b4a4844fb1393/docs/media/instrument/demo-frames/03-reach.png)
+![Shared-net reach on the real Corne PR](https://raw.githubusercontent.com/krishhgg/boardmap/f945fe2dd76a78be4545ab2d6afd38da5ff157b6/docs/media/instrument/demo-frames/03-reach.png)
 
 ## Try the real PRs
 
@@ -58,7 +58,7 @@ Each command fetches two pinned commits into a per-user cache, without a checkou
 | [HackRF #1411, HackRF One r10](https://github.com/greatscottgadgets/hackrf/pull/1411) | `f6598e7b..3bdc5547`, changed board |        437 |        111 |     390 |                 61 |
 | [Corne #237, v4.1.0](https://github.com/foostan/crkbd/pull/237)                       | `a935f345..eaf6e072`, cherry board  |        180 |         12 |      18 |                102 |
 
-The Corne PR changes both cherry and chocolate boards. Without `--board`, its report includes 360 head parts and 30 changed parts. The demo script selects cherry for a smaller review. See [instrument captures](docs/media/instrument), including HackRF and mobile layouts. Captures are actual Chromium runs, not mockups.
+The Corne PR changes both cherry and chocolate boards. Without `--board`, its report includes 360 head parts and 30 changed parts. The demo script selects cherry for a smaller review. See [instrument captures](https://github.com/krishhgg/boardmap/tree/f945fe2dd76a78be4545ab2d6afd38da5ff157b6/docs/media/instrument), including HackRF and mobile layouts. Captures are actual Chromium runs, not mockups.
 
 ## Where it fits
 
