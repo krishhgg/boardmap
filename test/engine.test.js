@@ -133,3 +133,25 @@ test('diff.relative cannot redirect changed-board selection from a subdirectory'
     assert.deepEqual(result.boards,['prototype/main.kicad_pcb']);assert.equal(result.stats.changed,1);
   } finally {rmSync(dir,{recursive:true,force:true});}
 });
+test('official KiCad 10 QA board retains real connectivity',()=> {
+  const parts=read(fixture('kicad10/issue24474.kicad_pcb'));
+  assert.equal(parts.length,8);assert.equal(compare(parts,parts).stats.nets,11);
+  assert.ok(parts.some(p=>Object.values(p.pins).flat().includes('VIN')));
+});
+test('stable sheet UUID renames normalize prefixes without hiding actual rewires',()=> {
+  const a=read(board(fp('R1','/Power/VIN'))),b=structuredClone(a);
+  a[0].path='/sheet-uuid/part-uuid';a[0].sheet='Power';b[0].path=a[0].path;b[0].sheet='power';b[0].pins['1']=['/power/VIN'];b[0].pads[0].net='/power/VIN';
+  let report=compare(a,b);assert.equal(report.stats.changed,0);assert.equal(report.sheetRenames.length,1);assert.equal(Object.keys(report.nets).length,1);
+  b[0].pins['1']=['/power/OTHER'];report=compare(a,b);assert.equal(report.stats.changed,1);assert.equal(report.parts[0].changes[0].before['1'][0],'/power/VIN');
+  b[0].path='/different-sheet/part-uuid';assert.ok(compare(a,b).parts[0].changes.some(c=>c.field==='sheet'));
+});
+test('rotating a footprint does not duplicate its pad geometry diff',()=> {
+  const a=read(board(fp('R1','VIN'))),b=structuredClone(a);b[0].angle=90;b[0].pads[0].angle=90;
+  assert.deepEqual(compare(a,b).parts[0].changes.map(c=>c.field),['angle']);
+  b[0].pads[0].w=2;assert.deepEqual(compare(a,b).parts[0].changes.map(c=>c.field),['angle','pads']);
+});
+test('Corne left and right ground rails are excluded symmetrically',()=> {
+  const parts=read(fixture('corne/corne-cherry.kicad_pcb')),report=compare(parts,parts);
+  assert.equal(reach(report,'main.kicad_pcb::C1').ids.length,2);assert.equal(reach(report,'main.kicad_pcb::rC1').ids.length,2);
+  assert.ok(reach(report,'main.kicad_pcb::rC1',{includeGround:true}).ids.length>70);
+});
