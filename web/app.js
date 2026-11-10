@@ -51,7 +51,8 @@ let report,
   resize,
   mapSize = "",
   previewReset,
-  hoverRetarget;
+  hoverRetarget,
+  lastHoverPoint;
 const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
 const shortFile = (file) => file.split("/").at(-1).replace(".kicad_pcb", "");
@@ -113,7 +114,8 @@ function cancelPreviewReset() {
   clearTimeout(previewReset);
 }
 function cancelHoverRetarget() {
-  clearTimeout(hoverRetarget);
+  clearTimeout(hoverRetarget?.timer);
+  hoverRetarget = null;
 }
 function schedulePreviewReset(event) {
   if (event.pointerType === "touch" || state.touchPreview) return;
@@ -334,15 +336,15 @@ ${orderedChanges(p)
   syncRoving(list, "list");
 }
 function wirePart(node, p) {
-  let touchClick = false,
-    retargetPoint;
+  let touchClick = false;
   const waitForRest = (event) => {
     cancelHoverRetarget();
-    retargetPoint = { x: event.clientX, y: event.clientY };
-    hoverRetarget = setTimeout(() => {
-      retargetPoint = null;
-      highlight(p.id);
-    }, 160);
+    hoverRetarget = {
+      id: p.id,
+      x: event.clientX,
+      y: event.clientY,
+      timer: setTimeout(() => highlight(p.id), 160),
+    };
   };
   node.onpointerdown = (event) => {
     touchClick = event.pointerType === "touch";
@@ -350,26 +352,24 @@ function wirePart(node, p) {
   node.onpointercancel = () => {
     touchClick = false;
   };
-  node.onpointerenter = (event) => {
-    if (event.pointerType === "touch") return;
-    cancelHoverRetarget();
-    if (node.classList.contains("tile") && state.hover && state.hover !== p.id)
-      waitForRest(event);
-    else highlight(p.id);
-  };
+  // Redrawing under a stationary cursor is not a request for another trace.
   node.onpointermove = (event) => {
     if (
-      retargetPoint &&
-      event.pointerType !== "touch" &&
-      state.hover !== p.id &&
-      Math.hypot(event.clientX - retargetPoint.x, event.clientY - retargetPoint.y) > 4
+      event.pointerType === "touch" ||
+      (lastHoverPoint &&
+        event.clientX === lastHoverPoint.x &&
+        event.clientY === lastHoverPoint.y) ||
+      state.hover === p.id
+    )
+      return;
+    if (!node.classList.contains("tile") || !state.hover) highlight(p.id);
+    else if (
+      hoverRetarget?.id !== p.id ||
+      Math.hypot(event.clientX - hoverRetarget.x, event.clientY - hoverRetarget.y) > 4
     )
       waitForRest(event);
   };
-  node.onpointerleave = () => {
-    retargetPoint = null;
-    cancelHoverRetarget();
-  };
+  node.onpointerleave = cancelHoverRetarget;
   node.onfocus = () => {
     if (!touchClick && node.matches(":focus-visible")) highlight(p.id);
   };
@@ -1387,6 +1387,10 @@ async function init() {
       };
     wireRoving($("part-list"), "list");
     wireRoving($("tiles"), "map");
+    document.addEventListener("pointermove", (event) => {
+      if (event.pointerType !== "touch")
+        lastHoverPoint = { x: event.clientX, y: event.clientY };
+    });
     // The instrument includes the gap between the map and its reach readout.
     const instrument = document.querySelector("main");
     instrument.addEventListener("pointerenter", cancelPreviewReset);

@@ -54,7 +54,7 @@ const detailCaptures = new Set([
   "board-neighbor-return",
 ]);
 const continuityCaptures = new Set([
-  "returned-part", "board-neighbor-return", "readable-sheet", "readable-root", "touch-return", "touch-root",
+  "returned-part", "escape-return", "board-neighbor-return", "readable-sheet", "readable-root", "touch-return", "touch-root",
 ]);
 const shouldCapture = (name) =>
   out && (values.continuity
@@ -75,6 +75,8 @@ const previewSettled = (id) => page.waitForFunction((expected) => {
   return expected ? tile?.dataset.id === expected : !tile;
 }, id);
 const hoverPart = async (node) => {
+  const box = await node.boundingBox();
+  await node.hover({ position: { x: box.width / 4, y: box.height / 4 } });
   await node.hover();
   await previewSettled(await node.getAttribute("data-id"));
 };
@@ -599,6 +601,18 @@ try {
   await page.locator(".close-diff").click();
   await assertReturnedPart(page, reachedId);
   await capture("returned-part");
+  const parkedPart = report.parts
+    .filter((p) => p.id !== candidate.id && p.id !== reachedId)
+    .sort((a, b) => Object.keys(b.pins).length - Object.keys(a.pins).length)[0];
+  const parkedBox = await page.locator(`.tile[data-id=${JSON.stringify(parkedPart.id)}]`).boundingBox();
+  await tile.click();
+  await page.locator(".reach-details > summary").click();
+  await page.locator(`.reach-part[data-id=${JSON.stringify(reachedId)}]`).first().click();
+  await page.mouse.move(parkedBox.x + parkedBox.width / 2, parkedBox.y + parkedBox.height / 2);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+  await assertReturnedPart(page, reachedId);
+  await capture("escape-return");
   await tile.click();
   assert.ok((await page.locator(".semantic tr").count()) > 1);
   if (values.fixture) {
@@ -1054,6 +1068,10 @@ try {
   await touchPage.locator("#reach").selectOption("direct");
   await touchPage.locator("#ground").tap();
   await touchCapture("touch-reach");
+  const mixedPart = report.parts
+    .filter((p) => p.id !== candidate.id)
+    .sort((a, b) => Object.keys(b.pins).length - Object.keys(a.pins).length)[0];
+  const mixedPark = await touchPage.locator(`.tile[data-id=${JSON.stringify(mixedPart.id)}]`).boundingBox();
   await touchPage
     .getByRole("button", { name: `Open ${candidate.ref} diff`, exact: true })
     .tap();
@@ -1082,7 +1100,10 @@ try {
     ),
     "touch inspector has no horizontal overflow",
   );
+  await touchPage.mouse.move(mixedPark.x + mixedPark.width / 2, mixedPark.y + mixedPark.height / 2);
   await touchPage.locator(".close-diff").tap();
+  await touchPage.waitForTimeout(500);
+  await assertReturnedPart(touchPage, candidate.id);
   const point = await tapSamePoint();
   const previewBox = await touchTile.boundingBox();
   assert.ok(
