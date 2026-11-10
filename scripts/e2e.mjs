@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { reach } from "../src/compare.js";
-import { changeGroup, changedPins } from "../web/review.js";
+import { changeGroup, changedPins, isElectrical } from "../web/review.js";
 import { buildReport } from "../src/git.js";
 import { serve } from "../src/server.js";
 import { reviewFixture } from "./fixture.mjs";
@@ -16,6 +16,7 @@ const { values } = parseArgs({
     out: { type: "string" },
     fixture: { type: "boolean" },
     removed: { type: "boolean" },
+    navigation: { type: "boolean" },
   },
 });
 const fixture = values.fixture
@@ -39,8 +40,15 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 const out = values.out;
 if (out) await mkdir(out, { recursive: true });
+const selectedCaptures = new Set(
+  report.parts.some((p) => p.ref === "U17")
+    ? ["map", "header-1024", "keyboard-focus", "u17-inspector"]
+    : ["touch-reach", "touch-diff"],
+);
+const shouldCapture = (name) =>
+  out && (!values.navigation || selectedCaptures.has(name));
 const capture = async (name) => {
-  if (out)
+  if (shouldCapture(name))
     await page.screenshot({
       path: `${out}/${name}.png`,
       fullPage: true,
@@ -88,14 +96,12 @@ try {
         throw new Error(`Unreadable reference ${label.textContent}`);
     }
   });
-  const actualRows = await page
-    .locator(".part-row")
-    .evaluateAll((nodes) =>
-      nodes.map((node) => ({
-        id: node.dataset.id,
-        group: node.dataset.changeGroup,
-      })),
-    );
+  const actualRows = await page.locator(".part-row").evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      id: node.dataset.id,
+      group: node.dataset.changeGroup,
+    })),
+  );
   assert.ok(
     actualRows.every(
       (row) =>
@@ -113,6 +119,190 @@ try {
     "rewired pin counts lead the electrical group",
   );
   await capture("map");
+  const electricalTotal = report.parts.filter(isElectrical).length;
+  const edits = report.parts.filter(
+    (p) => changeGroup(p) === "Electrical",
+  ).length;
+  if (edits)
+    assert.equal(
+      await page
+        .locator(".list-heading")
+        .filter({ hasText: "Electrical edits" })
+        .locator(".group-count")
+        .innerText(),
+      String(edits),
+      "sidebar Electrical edits counts modifications, while the header also includes additions and removals",
+    );
+  for (const width of [1024, 720]) {
+    await page.setViewportSize({ width, height: 900 });
+    assert.ok(
+      await page.locator("#stats .electrical").isVisible(),
+      `Electrical remains visible at ${width}px`,
+    );
+    assert.equal(
+      await page.locator("#stats .electrical strong").innerText(),
+      String(electricalTotal),
+    );
+    assert.equal(await page.locator("#stats .nets").isVisible(), false);
+    assert.equal(
+      await page
+        .locator("#stats .electrical strong")
+        .evaluate((node) => getComputedStyle(node).color),
+      "rgb(255, 138, 61)",
+    );
+    if (width === 1024) await capture("header-1024");
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const tabStops = async (selector) =>
+    page
+      .locator(`${selector} button`)
+      .evaluateAll(
+        (buttons) => buttons.filter((button) => button.tabIndex === 0).length,
+      );
+  assert.equal(await tabStops("#tiles"), 1);
+  assert.equal(await tabStops("#part-list"), report.stats.changed ? 1 : 0);
+  if (report.stats.changed) {
+    await page.locator("#search").focus();
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await page
+        .locator("#only-changed")
+        .evaluate((n) => n === document.activeElement),
+      true,
+    );
+    await page.keyboard.press("Tab");
+    assert.ok(
+      await page.evaluate(() => document.activeElement.matches(".part-row")),
+    );
+    for (const [key, index] of [
+      ["End", -1],
+      ["Home", 0],
+      ["ArrowDown", 1],
+      ["ArrowUp", 0],
+    ]) {
+      await page.keyboard.press(key);
+      assert.equal(
+        await page
+          .locator(".part-row")
+          .evaluateAll(
+            (nodes, index) =>
+              document.activeElement ===
+              nodes.at(Math.min(index, nodes.length - 1)),
+            index,
+          ),
+        true,
+      );
+      assert.equal(await tabStops("#part-list"), 1);
+    }
+    const origin = await page.evaluate(() => document.activeElement.dataset.id);
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
+    assert.equal(
+      await page.evaluate(() => document.activeElement.dataset.id),
+      origin,
+    );
+    assert.ok(
+      await page.evaluate(() => document.activeElement.matches(".part-row")),
+      "Escape returns to the exact originating list row",
+    );
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await page
+        .locator("#reach")
+        .evaluate((n) => n === document.activeElement),
+      true,
+      "one Tab exits the entire list to Reach",
+    );
+  }
+  await page.locator('#tiles button[tabindex="0"]').focus();
+  for (const [key, index] of [
+    ["End", -1],
+    ["Home", 0],
+    ["ArrowRight", 1],
+    ["ArrowLeft", 0],
+    ["ArrowDown", 1],
+    ["ArrowUp", 0],
+  ]) {
+    await page.keyboard.press(key);
+    assert.equal(
+      await page
+        .locator("#tiles button")
+        .evaluateAll(
+          (nodes, index) =>
+            document.activeElement ===
+            nodes.at(Math.min(index, nodes.length - 1)),
+          index,
+        ),
+      true,
+    );
+    assert.equal(await tabStops("#tiles"), 1);
+  }
+  await page.keyboard.press("ArrowRight");
+  await capture("keyboard-focus");
+  const mapOrigin = await page.evaluate(
+    () => document.activeElement.dataset.focusKey,
+  );
+  await page.keyboard.press("Space");
+  assert.ok(
+    await page.locator("#diff-panel").isVisible(),
+    "native Space inspects a map tile",
+  );
+  await page.keyboard.press("Escape");
+  assert.equal(
+    await page.evaluate(() => document.activeElement.dataset.focusKey),
+    mapOrigin,
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.press("Tab");
+  assert.ok(
+    await page.evaluate(() => !document.activeElement.closest("#tiles")),
+    "Tab exits the map group",
+  );
+  await page.keyboard.press("Escape");
+  // Faint labels must remain legible on every background that uses them.
+  assert.ok(
+    await page.evaluate(() => {
+      const luminance = (rgb) => {
+        const channels = rgb
+          .map((v) => v / 255)
+          .map((v) =>
+            v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4,
+          );
+        return (
+          channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+        );
+      };
+      const style = getComputedStyle(document.documentElement);
+      const color = (name) =>
+        style
+          .getPropertyValue(name)
+          .trim()
+          .slice(1)
+          .match(/../g)
+          .map((v) => parseInt(v, 16));
+      return ["--bg", "--panel", "--raised", "--tile"].every(
+        (name) =>
+          (luminance(color("--faint")) + 0.05) /
+            (luminance(color(name)) + 0.05) >=
+          4.5,
+      );
+    }),
+    "faint text meets 4.5:1 contrast",
+  );
+  for (const p of report.parts.filter((p) => changeGroup(p) === "Metadata")) {
+    const node = page.locator(`.tile[data-id=${JSON.stringify(p.id)}]`);
+    assert.equal(
+      await node.evaluate((n) => getComputedStyle(n).backgroundColor),
+      "rgb(29, 37, 44)",
+      "metadata retains a neutral fill, including added and removed artwork",
+    );
+    if (p.status === "removed")
+      assert.equal(
+        await node.evaluate((n) => getComputedStyle(n).borderTopStyle),
+        "dashed",
+      );
+  }
+
   await page.setViewportSize({ width: 1280, height: 800 });
   assert.ok(await page.locator("#impact").isVisible());
   assert.ok(
@@ -159,6 +349,60 @@ try {
     await page.locator("#impact").innerText(),
     new RegExp(`${paths} curves shown`),
   );
+  // Move into the real gutter outside this tile, while staying inside the canvas.
+  await page.locator("#search").focus();
+  await tile.hover();
+  const box = await tile.boundingBox();
+  await page.mouse.move(box.x - 1, box.y + box.height / 2);
+  assert.equal(
+    await page.locator(".tile.hovered").getAttribute("data-id"),
+    candidate.id,
+    "crossing a tile gutter keeps the current preview",
+  );
+  await page.mouse.move(1, 1);
+  assert.equal(
+    await page.locator(".tile.hovered").count(),
+    0,
+    "leaving the canvas clears pointer preview",
+  );
+  await tile.focus();
+  const otherId = report.parts.find((p) => p.id !== candidate.id).id;
+  const otherTile = page.locator(`.tile[data-id=${JSON.stringify(otherId)}]`);
+  await otherTile.hover();
+  await page.mouse.move(1, 1);
+  assert.equal(
+    await page.locator(".tile.hovered").getAttribute("data-id"),
+    candidate.id,
+    "leaving pointer preview restores the keyboard-focused component",
+  );
+  const firstRow = page.locator(".part-row").first();
+  if (await firstRow.count()) {
+    await firstRow.focus();
+    await otherTile.hover();
+    await page.mouse.move(1, 1);
+    assert.equal(
+      await page.locator(".tile.hovered").getAttribute("data-id"),
+      await firstRow.getAttribute("data-id"),
+      "leaving the map restores a keyboard-focused sidebar component",
+    );
+    await tile.focus();
+    await firstRow.hover();
+    await page.mouse.move(1, 1);
+    assert.equal(
+      await page.locator(".tile.hovered").getAttribute("data-id"),
+      candidate.id,
+      "leaving the sidebar restores a keyboard-focused map component",
+    );
+  }
+  await page.locator("#search").focus();
+  assert.equal(
+    await page.locator(".tile.hovered").count(),
+    0,
+    "blur clears keyboard preview",
+  );
+  await tile.hover();
+  if (candidate.status === "modified")
+    assert.match(await page.locator("#impact").innerText(), /Changed:/);
   await capture("reach");
   await page.locator("#reach").selectOption("transitive");
   await tile.hover();
@@ -188,7 +432,9 @@ try {
     }).ids.length;
     assert.match(
       await page.locator("#impact strong").innerText(),
-      new RegExp(`${count} ${transitive ? "transitively reachable parts" : "connected parts"}`),
+      new RegExp(
+        `${count} ${transitive ? "transitively reachable" : "connected"} ${count === 1 ? "part" : "parts"}`,
+      ),
       "inspector reach readout follows both controls",
     );
   }
@@ -209,14 +455,18 @@ try {
   if (values.fixture && !values.removed) {
     assert.equal(
       await page
-        .locator('.region [data-selected="true"][data-pad=""][data-changed="true"]')
+        .locator(
+          '.region [data-selected="true"][data-pad=""][data-changed="true"]',
+        )
         .count(),
       2,
       "changed mounting hole highlights in both revisions",
     );
     assert.equal(
       await page
-        .locator('.region [data-selected="true"][data-pad=""][data-changed="false"]')
+        .locator(
+          '.region [data-selected="true"][data-pad=""][data-changed="false"]',
+        )
         .count(),
       2,
       "the other mounting hole stays unchanged in both revisions",
@@ -312,7 +562,7 @@ try {
     // Exercise non-Mac text metrics and classic scrollbars during resize.
     const platformStyle = await page.addStyleTag({
       content:
-        ':root { font-family: Arial, sans-serif; } ::-webkit-scrollbar { width: 15px; height: 15px; }',
+        ":root { font-family: Arial, sans-serif; } ::-webkit-scrollbar { width: 15px; height: 15px; }",
     });
     for (const width of [1100, 390, 1440]) {
       const unchanged = page.locator(".tile.unchanged").first(),
@@ -333,6 +583,43 @@ try {
       );
     }
     await platformStyle.evaluate((node) => node.remove());
+  }
+  const swap =
+    report.parts.find(
+      (p) => p.ref === "U17" && p.changes.some((c) => c.field === "value"),
+    ) ??
+    (values.fixture && !values.removed
+      ? report.parts.find((p) => p.changes.some((c) => c.field === "value"))
+      : undefined);
+  if (swap) {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page
+      .locator(`.part-row[data-id=${JSON.stringify(swap.id)}]`)
+      .press("Enter");
+    for (const c of swap.changes.filter((c) =>
+      ["value", "footprint"].includes(c.field),
+    )) {
+      assert.ok(
+        (await page.locator(".swap-context").innerText()).includes(
+          `${c.before} → ${c.after}`,
+        ),
+      );
+    }
+    assert.ok(
+      (await page.locator(".swap-context").boundingBox()).y < 450,
+      "part replacement context appears above the long pin table",
+    );
+    if (changedPins(swap).length)
+      assert.match(
+        await page.locator(".semantic tr").nth(1).innerText(),
+        /^Pin /,
+      );
+    assert.equal(
+      await page.locator(".semantic tr").filter({ hasText: /^Pin / }).count(),
+      changedPins(swap).length,
+    );
+    await capture("u17-inspector");
+    await page.keyboard.press("Escape");
   }
   for (const status of ["modified", "added", "removed"]) {
     const row = page.locator(`.part-row.${status}`).first();
@@ -407,6 +694,10 @@ try {
       .getByRole("button", { name: report.boards.at(-1), exact: true })
       .click();
   }
+  assert.doesNotMatch(
+    await page.locator("#map-scale-note").innerText(),
+    /numbered pads/,
+  );
   await capture("board");
   await page.locator("#map-tab").click();
   for (const width of [720, 800, 390]) {
@@ -457,7 +748,7 @@ try {
     `.tile[data-id=${JSON.stringify(candidate.id)}]`,
   );
   const touchCapture = async (name) => {
-    if (out)
+    if (shouldCapture(name))
       await touchPage.screenshot({
         path: `${out}/${name}.png`,
         animations: "disabled",
@@ -465,7 +756,15 @@ try {
   };
   await touchTile.waitFor();
   await touchCapture("touch-map");
-  await touchTile.tap();
+  const tapSamePoint = async () => {
+    await touchTile.scrollIntoViewIfNeeded();
+    const box = await touchTile.boundingBox();
+    const x = box.x + box.width / 2,
+      y = box.y + box.height / 2;
+    await touchPage.touchscreen.tap(x, y);
+    return { x, y };
+  };
+  await tapSamePoint();
   assert.ok(
     await touchPage.locator("#map-panel").isVisible(),
     "first real touch tap previews reach",
@@ -480,6 +779,28 @@ try {
     (await touchPage.locator(".affected").count()) > 0,
     "touch highlights neighbors",
   );
+  await touchPage.locator("#ground").tap();
+  assert.deepEqual(
+    await touchPage.locator(".tile.affected").evaluateAll((nodes) =>
+      nodes.map((node) => node.dataset.id).sort(),
+    ),
+    reach(report, candidate.id, { includeGround: true }).ids.sort(),
+    "touching the ground control updates the current preview",
+  );
+  await touchPage.locator("#reach").dispatchEvent("pointerdown", {
+    pointerType: "touch",
+  });
+  await touchPage.locator("#reach").selectOption("transitive");
+  assert.match(
+    await touchPage.locator("#impact").innerText(),
+    /transitively reachable/,
+  );
+  assert.ok(
+    await touchPage.locator(".open-preview").isVisible(),
+    "touching reach settings preserves the preview action",
+  );
+  await touchPage.locator("#reach").selectOption("direct");
+  await touchPage.locator("#ground").tap();
   await touchCapture("touch-reach");
   await touchPage
     .getByRole("button", { name: `Open ${candidate.ref} diff`, exact: true })
@@ -487,6 +808,20 @@ try {
   assert.ok(
     await touchPage.locator("#diff-panel").isVisible(),
     "explicit action opens diff",
+  );
+  assert.ok(
+    !(await touchPage.locator("#impact").isVisible()),
+    "phone inspection gives the screen to the component rather than map controls",
+  );
+  assert.equal(
+    await touchPage.evaluate(() => scrollY),
+    0,
+    "phone inspection starts at the top without cropping the app header",
+  );
+  const firstPin = await touchPage.locator(".semantic tr").nth(1).boundingBox();
+  assert.ok(
+    firstPin.y >= 0 && firstPin.y + firstPin.height <= 844,
+    "first semantic change fits on the initial phone screen",
   );
   await touchCapture("touch-diff");
   assert.ok(
@@ -496,11 +831,27 @@ try {
     "touch inspector has no horizontal overflow",
   );
   await touchPage.locator(".close-diff").tap();
-  await touchTile.tap();
-  await touchTile.tap();
+  const point = await tapSamePoint();
+  const previewBox = await touchTile.boundingBox();
+  assert.ok(
+    point.x >= previewBox.x &&
+      point.x <= previewBox.x + previewBox.width &&
+      point.y >= previewBox.y &&
+      point.y <= previewBox.y + previewBox.height,
+    "preview keeps the original physical tap point inside the same tile",
+  );
+  assert.equal((await touchPage.locator("#impact").boundingBox()).height, 112);
+  await touchPage.touchscreen.tap(point.x, point.y);
   assert.ok(
     await touchPage.locator("#diff-panel").isVisible(),
     "second touch tap inspects",
+  );
+  assert.equal(
+    await touchPage
+      .locator(".diff-header h2")
+      .evaluate((n) => n.firstChild.textContent),
+    candidate.ref,
+    "the physical second tap inspects the original component",
   );
   await touchPage.locator(".close-diff").tap();
   await touchPage.locator("#toggle-changes").tap();
@@ -508,15 +859,205 @@ try {
     await touchPage.locator("#toggle-changes").getAttribute("aria-expanded"),
     "true",
   );
-  if (!report.stats.changed)
-    await touchPage.locator("#only-changed").uncheck();
+  if (!report.stats.changed) await touchPage.locator("#only-changed").uncheck();
   await touchPage.locator(".part-row").first().tap();
   assert.ok(
     await touchPage.locator("#map-panel").isVisible(),
     "touch sidebar previews before inspection",
   );
   assert.ok(await touchPage.locator(".open-preview").isVisible());
+  const listOrigin = await touchPage
+    .locator(".part-row")
+    .first()
+    .getAttribute("data-id");
+  await touchPage.locator(".open-preview").tap();
+  assert.equal(
+    await touchPage.locator("#toggle-changes").getAttribute("aria-expanded"),
+    "false",
+    "opening from expanded changes collapses the phone list",
+  );
+  const headBox = await touchPage.locator(".diff-header").boundingBox();
+  assert.ok(
+    headBox.y >= 0 && headBox.y + headBox.height <= 844,
+    "inspector header comes into view",
+  );
+  assert.equal(
+    await touchPage
+      .locator("#diff-panel")
+      .evaluate((n) => getComputedStyle(n).overflowY),
+    "visible",
+    "phone inspector uses document scrolling",
+  );
+  await touchPage.locator(".close-diff").tap();
+  assert.equal(
+    await touchPage.evaluate(() => document.activeElement.dataset.id),
+    listOrigin,
+    "phone Back focuses the originating component's map tile",
+  );
+  const canvasBox = await touchPage.locator("#canvas").boundingBox();
+  assert.ok(
+    canvasBox.y >= 0 && canvasBox.y + canvasBox.height <= 844,
+    "Back brings the map into view",
+  );
+  await tapSamePoint();
+  await touchPage.locator("#impact p").tap();
+  assert.equal(
+    await touchPage.locator(".open-preview").count(),
+    0,
+    "outside touch dismisses preview",
+  );
+  await touchPage.locator("#board-tab").tap();
+  await touchPage.locator("#map-tab").tap();
+  await tapSamePoint();
+  await touchPage.keyboard.press("Escape");
+  assert.equal(
+    await touchPage.locator(".open-preview").count(),
+    0,
+    "Escape dismisses touch preview",
+  );
+
   await touch.close();
+  if (values.fixture && !values.removed) {
+    // Exercise presentation-only cases without changing the engine fixture or classification.
+    const presentationReport = structuredClone(report);
+    const subject = presentationReport.parts.find((p) => p.id === candidate.id);
+    subject.ref = "ZD1";
+    subject.changes.push({
+      field: "pins",
+      before: { 2: ["GND"] },
+      after: { 2: ["VBUS"] },
+    });
+    subject.changes.push({
+      field: "attributes",
+      before: [],
+      after: [
+        "smd",
+        "through_hole",
+        "exclude_from_bom",
+        "exclude_from_pos_files",
+        "dnp",
+      ],
+    });
+    const fields = subject.changes.find((c) => c.field === "fields");
+    fields.before.Empty = "";
+    fields.after.Absent = "";
+    const removed = presentationReport.parts.find(
+      (p) => p.status === "removed",
+    );
+    removed.path = "/proven-sheet/removed-component";
+    removed.sheet = "FrontEnd";
+    const lookalike = structuredClone(removed);
+    lookalike.id += "-other-sheet";
+    lookalike.ref = "C99";
+    lookalike.path = "/different-sheet/other-component";
+    presentationReport.parts.push(lookalike);
+    presentationReport.sheetRenames = [
+      {
+        file: removed.file,
+        path: "/proven-sheet",
+        before: "FrontEnd",
+        after: "frontend",
+      },
+    ];
+    const proof = await browser.newPage({
+      viewport: { width: 1440, height: 900 },
+    });
+    proof.on("pageerror", (e) => errors.push(e.message));
+    await proof.route("**/api/report", (route) =>
+      route.fulfill({ json: presentationReport }),
+    );
+    await proof.goto(`http://127.0.0.1:${server.address().port}`);
+    await proof
+      .locator(`.part-row[data-id=${JSON.stringify(subject.id)}]`)
+      .press("Enter");
+    const assembly = proof.locator(".semantic tr").filter({
+      has: proof.getByRole("cell", { name: "Assembly", exact: true }),
+    });
+    assert.deepEqual(await assembly.locator("td").allTextContents(), [
+      "Assembly",
+      "None",
+      "SMD, Through-hole, Not in BOM, Not in position file, DNP",
+    ]);
+    assert.doesNotMatch(
+      await proof.locator(".diff-summary").innerText(),
+      /Attributes/,
+    );
+    const property = (key) =>
+      proof
+        .locator(".semantic tr")
+        .filter({
+          has: proof.getByRole("cell", {
+            name: `Property: ${key}`,
+            exact: true,
+          }),
+        })
+        .locator("td");
+    assert.deepEqual(await property("Empty").allTextContents(), [
+      "Property: Empty",
+      '\"\" (empty string)',
+      "∅",
+    ]);
+    assert.deepEqual(await property("Absent").allTextContents(), [
+      "Property: Absent",
+      "∅",
+      '\"\" (empty string)',
+    ]);
+    assert.match(
+      await proof.locator(".swap-context").innerText(),
+      /5V regulator → 3V3 regulator/,
+    );
+    assert.deepEqual(
+      await proof
+        .locator(".semantic tr")
+        .nth(1)
+        .locator("td")
+        .allTextContents(),
+      ["Pin 2", "GND", "VBUS"],
+      "ZD1 pin change remains first, ahead of the other semantic rows",
+    );
+    await proof.keyboard.press("Escape");
+    await proof
+      .getByRole("button", { name: `Open ${removed.file}`, exact: true })
+      .press("Enter");
+    const groupFor = (part) =>
+      proof
+        .locator(".group")
+        .filter({
+          has: proof.locator(`.tile[data-id=${JSON.stringify(part.id)}]`),
+        })
+        .locator(".group-title");
+    assert.match(
+      await groupFor(removed).innerText(),
+      /frontend/,
+      "removed part uses the proven sheet UUID's new display label",
+    );
+    assert.match(
+      await groupFor(lookalike).innerText(),
+      /FrontEnd/,
+      "matching old label without the matching sheet UUID stays separate",
+    );
+    await groupFor(removed).press("Enter");
+    assert.equal(
+      await proof
+        .locator(`.tile[data-id=${JSON.stringify(removed.id)}]`)
+        .count(),
+      1,
+      "sheet scope includes the proven removed sheetmate",
+    );
+    assert.equal(
+      await proof
+        .locator(`.tile[data-id=${JSON.stringify(lookalike.id)}]`)
+        .count(),
+      0,
+    );
+    await proof.locator(".tile").press("Enter");
+    assert.match(
+      await proof.locator(".diff-subtitle").innerText(),
+      /FrontEnd/,
+      "raw removed sheet label remains available in the inspector",
+    );
+    await proof.close();
+  }
   assert.deepEqual(errors, []);
   console.log(
     `PASS: ${report.parts.length} parts, ${report.stats.changed} changes; map, reach, transitive, ground, diff, drill-in, breadcrumbs, search, layout, mobile; no browser errors.`,
