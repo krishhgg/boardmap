@@ -445,8 +445,8 @@ select {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
-  height: 80px;
-  overflow-y: auto;
+  min-height: 128px;
+  height: auto;
   flex-shrink: 0;
   overscroll-behavior: contain;
 }
@@ -464,6 +464,15 @@ main:has(#diff-panel:not([hidden])) > #impact {
 #impact > div {
   min-width: 0;
   flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 26%);
+  column-gap: 16px;
+  align-content: start;
+}
+#impact > div > strong,
+#impact > div > p,
+#impact > div > .net-reach-list {
+  grid-column: 1;
 }
 #impact strong {
   font-family: var(--mono);
@@ -500,6 +509,33 @@ main:has(#diff-panel:not([hidden])) > #impact {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+#impact > div > .net-reach-list li span {
+  max-width: 180px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.net-reach-more {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  min-width: 0;
+  color: var(--faint);
+  border-left: 1px solid var(--line);
+  padding-left: 12px;
+  font-size: 11px;
+}
+.net-reach-more .net-reach-list {
+  height: 76px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.net-reach-more .net-reach-list li {
+  flex-shrink: 0;
+}
 #impact .net-reach-list strong {
   flex-shrink: 0;
   font-size: 11px;
@@ -514,6 +550,26 @@ main:has(#diff-panel:not([hidden])) > #impact {
   font-size: 12px;
   white-space: nowrap;
   align-self: center;
+}
+@media (min-width: 701px) and (max-width: 900px) {
+  #impact {
+    min-height: 176px;
+  }
+  #impact > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .net-reach-more {
+    grid-column: 1;
+    grid-row: 4;
+    margin-top: 8px;
+    padding-left: 0;
+    border-left: 0;
+  }
+  .net-reach-more .net-reach-list {
+    height: 32px;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 #map-panel {
   display: flex;
@@ -1136,12 +1192,34 @@ footer {
     font-size: 11px;
   }
   #impact {
-    height: 112px;
-    min-height: 112px;
+    height: 176px;
+    min-height: 176px;
     padding: 8px;
     margin-bottom: 8px;
     gap: 8px;
     flex-wrap: wrap;
+  }
+  #impact.sheet-scope {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  #impact > div {
+    display: block;
+    flex-basis: calc(100% - 12px);
+  }
+  #impact .net-reach-more {
+    display: none;
+  }
+  #impact .net-reach-list {
+    gap: 4px 12px;
+    margin-top: 5px;
+  }
+  #impact > div > .net-reach-list li span {
+    max-width: 112px;
+  }
+  #impact p {
+    max-height: none;
   }
   #impact strong {
     font-family: var(--mono);

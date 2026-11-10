@@ -50,7 +50,8 @@ let report,
   parts,
   resize,
   mapSize = "",
-  previewReset;
+  previewReset,
+  hoverRetarget;
 const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
 const shortFile = (file) => file.split("/").at(-1).replace(".kicad_pcb", "");
@@ -110,6 +111,9 @@ function wireRoving(root, region) {
 }
 function cancelPreviewReset() {
   clearTimeout(previewReset);
+}
+function cancelHoverRetarget() {
+  clearTimeout(hoverRetarget);
 }
 function schedulePreviewReset(event) {
   if (event.pointerType === "touch" || state.touchPreview) return;
@@ -334,8 +338,13 @@ function wirePart(node, p) {
     touchClick = false;
   };
   node.onpointerenter = (event) => {
-    if (event.pointerType !== "touch") highlight(p.id);
+    if (event.pointerType === "touch") return;
+    cancelHoverRetarget();
+    if (node.classList.contains("tile") && state.hover && state.hover !== p.id)
+      hoverRetarget = setTimeout(() => highlight(p.id), 160);
+    else highlight(p.id);
   };
+  node.onpointerleave = cancelHoverRetarget;
   node.onfocus = () => {
     if (!touchClick && node.matches(":focus-visible")) highlight(p.id);
   };
@@ -427,6 +436,7 @@ function buildMap() {
   root.replaceChildren();
   $("connections").replaceChildren();
   const shown = report.parts.filter((p) => inScope(p) && matches(p));
+  $("impact").classList.toggle("sheet-scope", Boolean(state.scope?.sheet));
   const removed = shown.filter((p) => p.status === "removed").length;
   $("scope-count").textContent =
     `${shown.length} in view${removed ? ` · ${removed} removed` : ""}`;
@@ -576,6 +586,7 @@ function renderBoard(shown, w, h) {
 }
 function highlight(id) {
   cancelPreviewReset();
+  cancelHoverRetarget();
   state.hover = id;
   if (state.selected) return;
   const p = parts.get(id),
@@ -642,9 +653,16 @@ function highlight(id) {
   }
   const visible = result.ids.filter((id) => centers.has(id)).length;
   const title = `${p.ref} · ${result.ids.length} ${state.transitive ? `transitively reachable ${result.ids.length === 1 ? "part" : "parts"}` : `shared-net ${result.ids.length === 1 ? "neighbor" : "neighbors"}`}`;
+  const change = p.status === "modified"
+    ? `Changed: ${changeFields(p).join(", ")}. `
+    : `${p.status[0].toUpperCase() + p.status.slice(1)}. `;
+  const phone = matchMedia("(max-width: 700px)").matches;
+  const facts = phone
+    ? `${result.nets.length} base/head nets · ${visible} in view · ${result.ids.length - visible} outside · ${edges.length} ${dense ? "electrical-link " : ""}curves. `
+    : `${change}${result.nets.length} nets across base/head · ${visible} highlighted in view · ${result.ids.length - visible} outside this view · ${edges.length} curves shown${dense ? " (electrical links only)" : ""}. `;
   const body = impact(
     title,
-    `${p.status === "modified" ? `Changed: ${changeFields(p).join(", ")}. ` : `${p.status[0].toUpperCase() + p.status.slice(1)}. `}${result.nets.length} ${result.nets.length === 1 ? "net" : "nets"} across base/head · ${visible} highlighted in view · ${result.ids.length - visible} outside this view. ${dense ? `${edges.length} curves shown, only links involving electrical, added or removed neighbors. ` : `${edges.length} curves shown. `}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation." : ""}`,
+    `${facts}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation." : ""}`,
   );
   const nets = rankedNetReach(report, p, result, state.transitive);
   if (nets.length) {
@@ -658,15 +676,22 @@ function highlight(id) {
       const row = el("li");
       row.dataset.net = net.name;
       row.dataset.count = net.count;
+      const label = netLabel(net.name);
+      label.title = net.name;
       row.append(
-        netLabel(net.name),
+        label,
         el("strong", `${net.count} ${net.count === 1 ? "part" : "parts"}`),
       );
       lists[index < 3 ? 0 : 1].append(row);
     }
     body.insertBefore(lists[0], body.querySelector("p"));
-    if (lists[1].children.length) body.append(lists[1]);
-    $("impact").tabIndex = 0;
+    if (lists[1].children.length) {
+      const more = el("div", undefined, "net-reach-more");
+      more.append(el("span", `${lists[1].children.length} more nets · scroll`), lists[1]);
+      lists[1].tabIndex = 0;
+      more.setAttribute("aria-live", "off");
+      body.append(more);
+    }
   }
   if (state.touchPreview === id) {
     const open = el("button", `Open ${p.ref} diff`, "open-preview");
@@ -694,6 +719,7 @@ function impact(title, text) {
 }
 function resetImpact() {
   cancelPreviewReset();
+  cancelHoverRetarget();
   state.touchPreview = null;
   state.hover = null;
   $("connections").replaceChildren();

@@ -48,7 +48,8 @@ const selectedCaptures = new Set(
 );
 const detailCaptures = new Set([
   "map", "reach", "reached-parts", "laptop-inspector",
-  "classification", "touch-sheet",
+  "classification", "touch-sheet", "touch-sheet-preview",
+  "readout-1280", "readout-1024",
 ]);
 const shouldCapture = (name) =>
   out && (values.detail
@@ -66,6 +67,24 @@ const previewSettled = (id) => page.waitForFunction((expected) => {
   const tile = document.querySelector(".tile.hovered");
   return expected ? tile?.dataset.id === expected : !tile;
 }, id);
+const hoverPart = async (node) => {
+  await node.hover();
+  await previewSettled(await node.getAttribute("data-id"));
+};
+const assertReadoutFits = async (surface) => {
+  const clipped = await surface.locator("#impact").evaluate((box) => {
+    const bounds = box.getBoundingClientRect();
+    return [...box.querySelectorAll(":scope > div > strong, :scope > div > p, :scope > div > .net-reach-list, .open-preview")]
+      .map((node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const text = range.getBoundingClientRect();
+        return { text: node.textContent, bottom: text.bottom, right: text.right };
+      })
+      .filter((node) => node.bottom > bounds.bottom - 4 || node.right > bounds.right - 4);
+  });
+  assert.deepEqual(clipped, [], "readout heading, leading nets, qualifiers and action fit in full");
+};
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.locator(".tile").first().waitFor();
@@ -317,7 +336,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 800 });
   assert.ok(await page.locator("#impact").isVisible());
   assert.ok(
-    (await page.locator("#canvas").boundingBox()).height > 500,
+    (await page.locator("#canvas").boundingBox()).height > 440,
     "map dominates 1280×800",
   );
   await capture("compact");
@@ -350,7 +369,7 @@ try {
       }),
     })
     .first();
-  await tile.hover();
+  await hoverPart(tile);
   assert.ok(
     (await page.locator("#connections path").count()) > 0,
     "hover draws net paths",
@@ -386,15 +405,23 @@ try {
   );
   // Move into the real gutter outside this tile, while staying inside the canvas.
   await page.locator("#search").focus();
-  await tile.hover();
+  await hoverPart(tile);
   await page.locator("#impact").hover();
   // Let the intentional pointer-exit grace period elapse while reading the net list.
   await page.waitForTimeout(160);
   await page.locator(".net-reach-list li").last().scrollIntoViewIfNeeded();
   assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), candidate.id,
     "scrolling the full net breakdown preserves the graph preview");
-  await page.locator("#impact").evaluate((node) => { node.scrollTop = 0; });
-  await tile.hover();
+  await page.locator(".net-reach-more .net-reach-list").evaluateAll((nodes) => {
+    for (const node of nodes) node.scrollTop = 0;
+  });
+  const crossed = report.parts.find((p) => p.id !== candidate.id);
+  await page.locator(`.tile[data-id=${JSON.stringify(crossed.id)}]`).hover();
+  await page.locator("#impact").hover();
+  await page.waitForTimeout(180);
+  assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), candidate.id,
+    "crossing another tile briefly on the way to the readout preserves the source");
+  await hoverPart(tile);
   const box = await tile.boundingBox();
   await page.mouse.move(box.x - 1, box.y + box.height / 2);
   assert.equal(
@@ -412,7 +439,7 @@ try {
   await tile.focus();
   const otherId = report.parts.find((p) => p.id !== candidate.id).id;
   const otherTile = page.locator(`.tile[data-id=${JSON.stringify(otherId)}]`);
-  await otherTile.hover();
+  await hoverPart(otherTile);
   await page.mouse.move(1, 1);
   await previewSettled(candidate.id);
   assert.equal(
@@ -423,7 +450,7 @@ try {
   const firstRow = page.locator(".part-row").first();
   if (await firstRow.count()) {
     await firstRow.focus();
-    await otherTile.hover();
+    await hoverPart(otherTile);
     await page.mouse.move(1, 1);
     await previewSettled(await firstRow.getAttribute("data-id"));
     assert.equal(
@@ -432,7 +459,7 @@ try {
       "leaving the map restores a keyboard-focused sidebar component",
     );
     await tile.focus();
-    await firstRow.hover();
+    await hoverPart(firstRow);
     await page.mouse.move(1, 1);
     await previewSettled(candidate.id);
     assert.equal(
@@ -447,18 +474,26 @@ try {
     0,
     "blur clears keyboard preview",
   );
-  await tile.hover();
+  await hoverPart(tile);
   if (candidate.status === "modified")
     assert.match(await page.locator("#impact").innerText(), /Changed:/);
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 1024, height: 720 }, { width: 720, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await hoverPart(page.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`));
+    await assertReadoutFits(page);
+    if ([1280, 1024].includes(viewport.width)) await capture(`readout-${viewport.width}`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await hoverPart(tile);
   await capture("reach");
   await page.locator("#reach").selectOption("transitive");
-  await tile.hover();
+  await hoverPart(tile);
   assert.match(
     await page.locator("#impact").innerText(),
     /transitively reachable/,
   );
   await page.locator("#ground").check();
-  await tile.hover();
+  await hoverPart(tile);
   assert.match(await page.locator("#impact").innerText(), /Ground included/);
   await page.locator("#ground").uncheck();
   await page.locator("#reach").selectOption("direct");
@@ -680,6 +715,7 @@ try {
       await page.locator(".semantic tr").filter({ hasText: /^Pin / }).count(),
       changedPins(swap).length,
     );
+    await page.mouse.move(1, 1);
     await capture("u17-inspector");
     for (const viewport of [{ width: 1280, height: 800 }, { width: 1024, height: 720 }]) {
       await page.setViewportSize(viewport);
@@ -687,7 +723,12 @@ try {
       assert.ok(first.y >= 0 && first.y + first.height <= viewport.height,
         "the first semantic change is visible on a laptop");
       assert.ok(!(await page.locator("#impact").isVisible()));
-      assert.equal((await page.locator(".region svg").first().boundingBox()).height, 120);
+      await page.waitForFunction(() => {
+        const regions = [...document.querySelectorAll(".region svg")];
+        return regions.length === 2 && regions.every((svg) =>
+          svg.getBoundingClientRect().height === 120,
+        );
+      });
       assert.equal(await page.locator('.region svg[data-revision="before"]').count(), 1);
       if (viewport.width === 1024) await capture("laptop-inspector");
     }
@@ -894,6 +935,7 @@ try {
     await touchPage.locator(".open-preview").isVisible(),
     "touching reach settings preserves the preview action",
   );
+  await assertReadoutFits(touchPage);
   await touchPage.locator("#reach").selectOption("direct");
   await touchPage.locator("#ground").tap();
   await touchCapture("touch-reach");
@@ -935,7 +977,7 @@ try {
       point.y <= previewBox.y + previewBox.height,
     "preview keeps the original physical tap point inside the same tile",
   );
-  assert.equal((await touchPage.locator("#impact").boundingBox()).height, 112);
+  assert.equal((await touchPage.locator("#impact").boundingBox()).height, 176);
   await touchPage.touchscreen.tap(point.x, point.y);
   assert.ok(
     await touchPage.locator("#diff-panel").isVisible(),
@@ -1019,12 +1061,31 @@ try {
       return { id: node.dataset.id, side: Math.min(box.width, box.height) };
     }));
     assert.ok(targets.every((tile) => tile.side >= 32), "drilled phone parts have 32px touch targets");
+    if (report.head === "3bdc5547004c8244de5f37104410c363854e5634") {
+      const regulator = report.parts.find((p) => p.ref === "U21");
+      const regulatorTile = touchPage.locator(`.tile[data-id=${JSON.stringify(regulator.id)}]`);
+      await regulatorTile.scrollIntoViewIfNeeded();
+      await regulatorTile.tap();
+      await assertReadoutFits(touchPage);
+      await touchPage.keyboard.press("Escape");
+    }
     const smallest = targets.sort((a, b) => a.side - b.side)[0];
     const small = touchPage.locator(`.tile[data-id=${JSON.stringify(smallest.id)}]`);
     await small.scrollIntoViewIfNeeded();
     await touchCapture("touch-sheet");
     const box = await small.boundingBox(), x = box.x + box.width / 2, y = box.y + box.height / 2;
     await touchPage.touchscreen.tap(x, y);
+    const stickyReadout = await touchPage.locator("#impact").boundingBox();
+    const inspectAction = await touchPage.locator(".open-preview").boundingBox();
+    assert.ok(stickyReadout.y >= 0 && stickyReadout.y + stickyReadout.height <= 844,
+      "the readout stays visible in a scrolled phone sheet");
+    assert.ok(inspectAction.y >= stickyReadout.y &&
+      inspectAction.y + inspectAction.height <= stickyReadout.y + stickyReadout.height,
+      "the phone inspect action stays inside the visible readout");
+    assert.ok(y > stickyReadout.y + stickyReadout.height,
+      "the sticky readout does not cover the original tap point");
+    await assertReadoutFits(touchPage);
+    await touchCapture("touch-sheet-preview");
     await touchPage.touchscreen.tap(x, y);
     await touchPage.locator("#diff-panel").waitFor({ state: "visible" });
     assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), smallest.id,
