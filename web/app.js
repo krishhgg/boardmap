@@ -623,17 +623,21 @@ function highlight(id) {
   );
   const nets = rankedNetReach(report, p, result, state.transitive);
   if (nets.length) {
-    const list = el("ul", undefined, "net-reach-list");
-    list.setAttribute("aria-label", "Reach by net across base and head; counts overlap");
-    list.setAttribute("aria-live", "off");
-    for (const net of nets) {
+    const lists = ["Leading net reach", "Remaining net reach"].map((label) => {
+      const list = el("ul", undefined, "net-reach-list");
+      list.setAttribute("aria-label", `${label} across base and head; counts overlap`);
+      list.setAttribute("aria-live", "off");
+      return list;
+    });
+    for (const [index, net] of nets.entries()) {
       const row = el("li");
       row.dataset.net = net.name;
       row.dataset.count = net.count;
       row.append(el("span", net.name), el("strong", `${net.count} ${net.count === 1 ? "part" : "parts"}`));
-      list.append(row);
+      lists[index < 3 ? 0 : 1].append(row);
     }
-    body.append(list);
+    body.insertBefore(lists[0], body.querySelector("p"));
+    if (lists[1].children.length) body.append(lists[1]);
     $("impact").tabIndex = 0;
   }
   if (state.touchPreview === id) {

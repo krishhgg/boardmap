@@ -356,6 +356,10 @@ try {
   assert.deepEqual(netCounts.map((net) => net.count),
     [...netCounts.map((net) => net.count)].sort((a, b) => b - a),
     "larger net reach appears first");
+  const leadingNet = await page.locator(".net-reach-list li").first().boundingBox();
+  const readout = await page.locator("#impact").boundingBox();
+  assert.ok(leadingNet.y >= readout.y && leadingNet.y + leadingNet.height <= readout.y + readout.height,
+    "the leading net count is visible without scrolling the readout");
   const paths = await page.locator("#connections path").count();
   assert.match(
     await page.locator("#impact").innerText(),
