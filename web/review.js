@@ -59,7 +59,8 @@ export function changedPins(part) {
 }
 export function changeGroup(part) {
   if (part.status === "unchanged") return "Unchanged";
-  if (!part.pads.length) return "Metadata";
+  if (!(part.before?.pads?.length || part.after?.pads?.length || part.pads.length))
+    return "Metadata";
   if (part.status === "removed") return "Removed";
   if (part.status === "added") return "Added";
   return part.changes.some(

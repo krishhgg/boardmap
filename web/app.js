@@ -777,11 +777,14 @@ function openDiff(p) {
     panel.append(details);
   }
   panel.scrollTop = 0;
-  impact(
-    `${p.ref} · ${reach(report, p.id, state).ids.length} connected parts`,
-    "Numbered pad connectivity and footprint properties, compared across base and head. White pads are unchanged; red and green pads changed.",
-  );
+  inspectorImpact(p);
   close.focus();
+}
+function inspectorImpact(p) {
+  impact(
+    `${p.ref} · ${reach(report, p.id, state).ids.length} ${state.transitive ? "transitively reachable parts" : "connected parts"}`,
+    `Numbered pad connectivity and footprint properties, compared across base and head. White pads are unchanged; red and green pads changed. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
+  );
 }
 function closeDiff() {
   const id = state.selected;
@@ -1025,11 +1028,13 @@ async function init() {
     $("only-changed").onchange = renderList;
     $("reach").onchange = (e) => {
       state.transitive = e.target.value === "transitive";
-      if (state.hover) highlight(state.hover);
+      if (state.selected) inspectorImpact(parts.get(state.selected));
+      else if (state.hover) highlight(state.hover);
     };
     $("ground").onchange = (e) => {
       state.includeGround = e.target.checked;
-      if (state.hover) highlight(state.hover);
+      if (state.selected) inspectorImpact(parts.get(state.selected));
+      else if (state.hover) highlight(state.hover);
     };
     for (const [id, view] of [
       ["map-tab", "map"],

@@ -75,6 +75,15 @@ test("changed numbered pads combine normalized geometry and pin-net changes", ()
   );
 });
 
+test("removing the last electrical pad remains an electrical change", () => {
+  const p = part(
+    [{ field: "pins" }, { field: "pads" }],
+    { before: { pads: [{ number: "1" }] }, after: { pads: [] }, pads: [] },
+  );
+  assert.equal(changeGroup(p), "Electrical");
+  assert.ok(isElectrical(p));
+});
+
 test("population transitions and both-present part identifiers outrank descriptive fields", () => {
   for (const [before, after] of [
     [{ DNP: "DNP" }, { DNP: "" }],

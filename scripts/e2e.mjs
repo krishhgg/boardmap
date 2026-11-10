@@ -173,6 +173,25 @@ try {
   await page.locator("#reach").selectOption("direct");
   await tile.click();
   await page.locator("#diff-panel").waitFor({ state: "visible" });
+  for (const [transitive, includeGround] of [
+    [false, true],
+    [true, true],
+    [false, false],
+  ]) {
+    await page
+      .locator("#reach")
+      .selectOption(transitive ? "transitive" : "direct");
+    await page.locator("#ground").setChecked(includeGround);
+    const count = reach(report, candidate.id, {
+      transitive,
+      includeGround,
+    }).ids.length;
+    assert.match(
+      await page.locator("#impact strong").innerText(),
+      new RegExp(`${count} ${transitive ? "transitively reachable parts" : "connected parts"}`),
+      "inspector reach readout follows both controls",
+    );
+  }
   assert.equal(await page.locator(".region svg").count(), 2);
   assert.ok((await page.locator(".semantic tr").count()) > 1);
   if (values.fixture) {
@@ -358,7 +377,15 @@ try {
   }
   await capture("board");
   await page.locator("#map-tab").click();
-  await page.setViewportSize({ width: 390, height: 844 });
+  for (const width of [720, 800, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      `no horizontal overflow at ${width}px`,
+    );
+  }
   assert.ok(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
