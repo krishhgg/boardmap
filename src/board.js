@@ -29,9 +29,12 @@ export function readBoard(text, file) {
       footprint: fp[1], fields, pins, pads, x: Number(at[1] ?? 0), y: Number(at[2] ?? 0), angle: Number(at[3] ?? 0),
       side: atom(fp,'layer'), uuid: atom(fp,'uuid',atom(fp,'tstamp')), path: atom(fp,'path')});
   }
+  const counts = new Map();
+  for (const part of parts) counts.set(part.ref, (counts.get(part.ref) ?? 0) + 1);
   const seen = new Set();
   for (const part of parts) {
-    if (seen.has(part.id)) throw new Error(`${file}: duplicate reference ${part.ref}`);
+    if (counts.get(part.ref) > 1) part.id += `::${part.uuid || part.path}`;
+    if (seen.has(part.id)) throw new Error(`${file}: duplicate reference ${part.ref} has no unique UUID`);
     seen.add(part.id);
   }
   return parts;
