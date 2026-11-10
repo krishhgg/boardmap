@@ -1076,7 +1076,8 @@ try {
       return { id: node.dataset.id, side: Math.min(box.width, box.height) };
     }));
     assert.ok(targets.every((tile) => tile.side >= 32), "drilled phone parts have 32px touch targets");
-    if (report.head === "3bdc5547004c8244de5f37104410c363854e5634") {
+    if (report.head === "3bdc5547004c8244de5f37104410c363854e5634" &&
+        report.boards.includes("hardware/hackrf-one/hackrf-one.kicad_pcb")) {
       const regulator = report.parts.find((p) => p.ref === "U21");
       const regulatorTile = touchPage.locator(`.tile[data-id=${JSON.stringify(regulator.id)}]`);
       await regulatorTile.scrollIntoViewIfNeeded();
