@@ -471,7 +471,7 @@ function openDiff(p) {
     figure.append(
       el(
         "figcaption",
-        `${key === "before" ? "BASE" : "HEAD"} · local pad region · ${extent.toFixed(1)} mm radius · custom shapes approximate`,
+        `${key === "before" ? "BASE" : "HEAD"} · local pad region · ${extent.toFixed(1)} mm radius · nonstandard shapes approximate`,
       ),
     );
     figure.append(regionSvg(p, key, extent));
@@ -625,7 +625,13 @@ function regionSvg(selected, key, extent) {
         height: pad.h,
         rx: ["circle", "oval"].includes(pad.shape)
           ? Math.min(pad.w, pad.h) / 2
-          : 0.12,
+          : pad.shape === "roundrect"
+            ? Math.min(pad.w, pad.h) *
+              Number(
+                pad.geometry.find((n) => n[0] === "roundrect_rratio")?.[1] ??
+                  0.25,
+              )
+            : 0,
         fill: color,
         opacity: p.id === selected.id ? 0.9 : 0.4,
         transform: `rotate(${-pad.angle} ${x} ${y})`,
