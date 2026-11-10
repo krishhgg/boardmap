@@ -1,5 +1,5 @@
 import {mkdirSync} from 'node:fs';
-import {tmpdir} from 'node:os';
+import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
@@ -13,7 +13,7 @@ export const demos = {
 const [name,...extra] = process.argv.slice(2), demo=demos[name];
 if (!demo) {console.error('Usage: node scripts/demo.mjs <hackrf|corne> [boardmap options]');process.exitCode=1;}
 else {
-  const dir=join(tmpdir(),'boardmap-demos',name);mkdirSync(dir,{recursive:true});
+  const dir=join(homedir(),'.cache','boardmap','demos',name);mkdirSync(dir,{recursive:true});
   try {
     git(dir,['init','-q']);
     console.log(`Fetching ${name} PR #${demo.pr} into ${dir}. No checkout.`);

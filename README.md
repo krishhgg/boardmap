@@ -50,7 +50,7 @@ node scripts/demo.mjs corne
 node scripts/demo.mjs hackrf
 ```
 
-Each command fetches two pinned commits into a temporary cache, without a checkout, then starts the local UI. Stop one review with Ctrl+C before running the next. The cache is under your OS temporary directory in `boardmap-demos` and can be deleted after use. Only the first fetch requires internet if you keep the git objects and run the CLI directly.
+Each command fetches two pinned commits into a per-user cache, without a checkout, then starts the local UI. Stop one review with Ctrl+C before running the next. The cache is under your home directory in `.cache/boardmap/demos` and can be deleted after use. Only the first fetch requires internet if you keep the git objects and run the CLI directly.
 
 | Source PR | Comparison | Head parts | Changed | Unchanged affected |
 | --- | --- | ---: | ---: | ---: |
@@ -87,6 +87,7 @@ npm ci
 npm test
 npx playwright install chromium
 npm run test:e2e -- --base HEAD --head HEAD
+npm run test:e2e -- --fixture
 ```
 
 Unit tests run without installing any dependencies. Playwright is a development dependency only. For an existing Chromium binary, set `BOARDMAP_BROWSER` to its executable path instead of downloading a browser.
@@ -95,11 +96,11 @@ To reproduce real-data captures after fetching the demos:
 
 ```sh
 node scripts/demo.mjs hackrf --json /tmp/hackrf-review.json
-npm run test:e2e -- --repo /tmp/boardmap-demos/hackrf \
+npm run test:e2e -- --repo "$HOME/.cache/boardmap/demos/hackrf" \
   --base f6598e7b14b7ec539126479e9c6d095c668a534e \
   --head 3bdc5547004c8244de5f37104410c363854e5634 --out docs/media/hackrf
 ```
 
-On systems where the temporary directory is not `/tmp`, use the cache path printed by your environment. The e2e test starts an ephemeral loopback server, checks the map, reach modes, ground toggle, diff, drill-in, breadcrumbs, search, every board chooser, and mobile overflow, then closes it. `--out` writes screenshots.
+The demo command prints its cache path. The synthetic `--fixture` browser run creates a private temporary git repository with two commits, nine boards, and modified, added and removed components, then deletes it. It also checks focus after resizing a diff and clipping of diagonal pads. The e2e test starts an ephemeral loopback server, checks the map, reach modes, ground toggle, diff, drill-in, breadcrumbs, search, every board chooser, and mobile overflow, then closes it. `--out` writes screenshots.
 
 MIT license for boardmap. Unmodified real-world test boards and their notices have separate licenses under [test/fixtures](test/fixtures/README.md). Demo screenshots contain design data from those upstream projects.
