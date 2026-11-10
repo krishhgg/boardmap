@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import { buildReport } from "../src/git.js";
 import { serve } from "../src/server.js";
 const repo = process.argv[2];
 if (!repo)
   throw new Error(
-    "Usage: node scripts/capture-demo.mjs PATH_TO_CORNE_GIT_CACHE",
+    "Usage: node scripts/capture-demo.mjs PATH_TO_CORNE_GIT_CACHE [--gif]",
   );
 const report = buildReport(
   repo,
@@ -19,24 +21,23 @@ const server = await serve(report),
     executablePath: process.env.BOARDMAP_BROWSER || undefined,
   });
 const page = await browser.newPage({
-  viewport: { width: 1000, height: 1100 },
+  viewport: { width: 1440, height: 900 },
   deviceScaleFactor: 1,
 });
-const out = "docs/media/demo-frames";
+const out = "docs/media/instrument/demo-frames";
 await mkdir(out, { recursive: true });
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.locator(".tile").first().waitFor();
   const capture = async (name) => {
-    const box = await page.locator(".workspace").boundingBox();
     return page.screenshot({
       path: `${out}/${name}.png`,
-      clip: { x: 0, y: box.y, width: 1000, height: 850 },
       animations: "disabled",
     });
   };
   await capture("01-map");
   await page.getByRole("button", { name: "Open left", exact: true }).click();
+  await page.locator("#map-tab").focus();
   await page.locator("#impact").hover();
   await capture("02-sheet");
   const target = page
@@ -55,6 +56,43 @@ try {
     ["Pin 2", "GND", "VBUS"],
   );
   await capture("04-diff");
+  if (process.argv.includes("--gif")) {
+    const frames = ["01-map", "02-sheet", "03-reach", "04-diff"];
+    const durations = [1.2, 1.2, 2.8, 2.8];
+    const manifest = resolve(out, "frames.txt");
+    await writeFile(
+      manifest,
+      frames
+        .map((frame, i) => `file '${frame}.png'\nduration ${durations[i]}`)
+        .join("\n") + `\nfile '${frames.at(-1)}.png'\n`,
+    );
+    try {
+      const result = spawnSync(
+        "ffmpeg",
+        [
+          "-y",
+          "-f",
+          "concat",
+          "-safe",
+          "0",
+          "-i",
+          manifest,
+          "-filter_complex",
+          "fps=10,scale=1100:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3",
+          "-t",
+          "8",
+          "-loop",
+          "0",
+          "docs/media/instrument/boardmap-demo.gif",
+        ],
+        { encoding: "utf8" },
+      );
+      if (result.error || result.status !== 0)
+        throw new Error(result.error?.message ?? result.stderr);
+    } finally {
+      await unlink(manifest);
+    }
+  }
   console.log(
     "Captured real Corne ZD1 review frames. Pin 2 changes from GND to VBUS.",
   );
