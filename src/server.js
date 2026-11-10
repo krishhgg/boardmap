@@ -4,7 +4,8 @@ const assets = new Map([
   ['/', ['../web/index.html','text/html; charset=utf-8']],
   ['/app.js',['../web/app.js','text/javascript; charset=utf-8']],
   ['/style.css',['../web/style.css','text/css; charset=utf-8']],
-  ['/compare.js',['./compare.js','text/javascript; charset=utf-8']]
+  ['/compare.js',['./compare.js','text/javascript; charset=utf-8']],
+  ['/normalize.js',['./normalize.js','text/javascript; charset=utf-8']]
 ]);
 export function serve(report, port = 0) {
   const server = createServer(async (req,res)=> {

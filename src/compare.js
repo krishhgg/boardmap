@@ -1,6 +1,7 @@
+import {sameSheet,sheetRenames,padGeometry} from './normalize.js';
 const equal = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 const stable = object => Object.fromEntries(Object.entries(object).sort(([a],[b]) => a.localeCompare(b)));
-const ground = name => /^(GND|GNDA|GNDD|AGND|DGND|PGND|Earth|Chassis)$/i.test(name.split('/').at(-1));
+const ground = name => /^([ADPS]?GND(?:A|D|[_-]?[LR]|[0-9]+)?|VSS[A-Z0-9]*|Earth|Chassis)$/i.test(name.split('/').at(-1));
 export {ground};
 export function compare(before, after, metadata = {}) {
   const duplicates = new Set();
@@ -14,16 +15,18 @@ export function compare(before, after, metadata = {}) {
   }));
   before = normalize(before); after = normalize(after);
   const old = new Map(before.map(p => [p.id,p])), fresh = new Map(after.map(p => [p.id,p]));
-  const parts = [...new Set([...old.keys(),...fresh.keys()])].sort().map(id => {
+  const {renames,netName}=sheetRenames(old,fresh);
+  const pins = p => stable(Object.fromEntries(Object.entries(p.pins).map(([pin,nets])=>[pin,[...new Set(nets.map(name=>netName(p.file,name)))].sort()])));
+  const parts = [...new Set([...old.keys(),...fresh.keys()])].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map(id => {
     const a = old.get(id), b = fresh.get(id), changes = [];
     if (a && b) {
       for (const key of ['value','footprint','side','sheet','x','y','angle','attributes','fields','pins']) {
-        const av = key === 'pins' ? stable(a[key]) : a[key], bv = key === 'pins' ? stable(b[key]) : b[key];
-        if (!equal(av,bv)) changes.push({field:key,before:a[key],after:b[key]});
+        if(key==='sheet' && sameSheet(a,b)) continue;
+        const av = key === 'pins' ? pins(a) : a[key], bv = key === 'pins' ? stable(b[key]) : b[key];
+        if (!equal(av,bv)) changes.push({field:key,before:av,after:bv});
       }
       // Changes to pad geometry matter even when the footprint library name stays the same.
-      const geometry = pads => pads.map(({net,...pad})=>pad).sort((x,y)=>JSON.stringify(x).localeCompare(JSON.stringify(y)));
-      const ag = geometry(a.pads), bg = geometry(b.pads);
+      const ag = padGeometry(a), bg = padGeometry(b);
       if (!equal(ag,bg)) changes.push({field:'pads',before:ag,after:bg});
     }
     return {...(b ?? a), before:a ?? null, after:b ?? null, changes,
@@ -33,7 +36,8 @@ export function compare(before, after, metadata = {}) {
   for (const part of parts) {
     for (const [revision,state] of [['before',part.before],['after',part.after]]) {
       if (!state) continue;
-      for (const name of new Set(Object.values(state.pins).flat().filter(Boolean))) {
+      for (const raw of new Set(Object.values(state.pins).flat().filter(Boolean))) {
+        const name=revision==='before'?netName(part.file,raw):raw;
         const key = `${part.file}::${name}`;
         if (!Object.hasOwn(nets,key)) nets[key] = {name,file:part.file,ground:ground(name),before:[],after:[]};
         const list = nets[key][revision];
@@ -45,7 +49,7 @@ export function compare(before, after, metadata = {}) {
     net.before.sort(); net.after.sort();
     net.status = !net.before.length?'added':!net.after.length?'removed':equal(net.before,net.after)?'unchanged':'modified';
   }
-  const report = {schema:1,...metadata, parts,nets};
+  const report = {schema:1,...metadata, parts,nets,sheetRenames:renames};
   const changed = parts.filter(p => p.status !== 'unchanged');
   const changedIds = new Set(changed.map(p=>p.id)), affected = new Set();
   for (const net of Object.values(nets)) {

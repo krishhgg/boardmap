@@ -133,3 +133,55 @@ test('diff.relative cannot redirect changed-board selection from a subdirectory'
     assert.deepEqual(result.boards,['prototype/main.kicad_pcb']);assert.equal(result.stats.changed,1);
   } finally {rmSync(dir,{recursive:true,force:true});}
 });
+test('official KiCad 10 QA board retains real connectivity',()=> {
+  const parts=read(fixture('kicad10/issue24474.kicad_pcb'));
+  assert.equal(parts.length,8);assert.equal(compare(parts,parts).stats.nets,11);
+  assert.ok(parts.some(p=>Object.values(p.pins).flat().includes('VIN')));
+});
+test('stable sheet UUID renames normalize prefixes without hiding actual rewires',()=> {
+  const a=read(board(fp('R1','/Power/VIN'))),b=structuredClone(a);
+  a[0].path='/sheet-uuid/part-uuid';a[0].sheet='Power';b[0].path=a[0].path;b[0].sheet='power';b[0].pins['1']=['/power/VIN'];b[0].pads[0].net='/power/VIN';
+  let report=compare(a,b);assert.equal(report.stats.changed,0);assert.equal(report.sheetRenames.length,1);assert.equal(Object.keys(report.nets).length,1);
+  b[0].pins['1']=['/power/OTHER'];report=compare(a,b);assert.equal(report.stats.changed,1);assert.equal(report.parts[0].changes[0].before['1'][0],'/power/VIN');
+  b[0].path='/different-sheet/part-uuid';assert.ok(compare(a,b).parts[0].changes.some(c=>c.field==='sheet'));
+});
+test('rotating a footprint does not duplicate its pad geometry diff',()=> {
+  const a=read(board(fp('R1','VIN'))),b=structuredClone(a);b[0].angle=90;b[0].pads[0].angle=90;
+  assert.deepEqual(compare(a,b).parts[0].changes.map(c=>c.field),['angle']);
+  b[0].pads[0].w=2;assert.deepEqual(compare(a,b).parts[0].changes.map(c=>c.field),['angle','pads']);
+});
+test('Corne left and right ground rails are excluded symmetrically',()=> {
+  const parts=read(fixture('corne/corne-cherry.kicad_pcb')),report=compare(parts,parts);
+  assert.equal(reach(report,'main.kicad_pcb::C1').ids.length,2);assert.equal(reach(report,'main.kicad_pcb::rC1').ids.length,2);
+  assert.ok(reach(report,'main.kicad_pcb::rC1',{includeGround:true}).ids.length>70);
+});
+test('unchanged child sheet prefixes guard against a broader rename',()=> {
+  const a=read(board(fp('R1','/Power/VIN'),fp('R2','/Power/Monitor/SENSE'))),b=structuredClone(a);
+  for(const [i,sheet] of ['Power','Power/Monitor'].entries()) {a[i].sheet=sheet;b[i].sheet=sheet;a[i].path=`/sheet${i}/part${i}`;b[i].path=a[i].path;}
+  b[0].sheet='Supply';b[0].pins['1']=['/Supply/VIN'];
+  assert.equal(compare(a,b).stats.changed,0);
+  b[1].pins['1']=['/Supply/Monitor/SENSE'];assert.equal(compare(a,b).stats.changed,1);
+});
+test('sheet prefix renames never merge distinct historical nets',()=> {
+  const a=read(board(fp('R1','/A/X'),fp('R2','/B/X'))),b=structuredClone(a.slice(0,1));
+  a[0].sheet='A';a[0].path='/sheetA/part1';a[1].sheet='B';a[1].path='/sheetB/part2';b[0].sheet='B';b[0].path=a[0].path;b[0].pins['1']=['/B/X'];
+  const report=compare(a,b);
+  assert.deepEqual(report.nets['main.kicad_pcb::/A/X'].before,['main.kicad_pcb::R1']);
+  assert.deepEqual(report.nets['main.kicad_pcb::/B/X'].before,['main.kicad_pcb::R2']);
+  assert.ok(report.parts[0].changes.some(c=>c.field==='pins'));
+});
+test('unmatched and removed sheet labels still guard narrower prefixes',()=> {
+  const a=read(board(fp('R1','/Power/VIN'),fp('R2','/Power/Monitor/SENSE'))),b=structuredClone(a);
+  for(const [i,sheet] of ['Power','Power/Monitor'].entries()) {a[i].sheet=sheet;b[i].sheet=sheet;a[i].path=`/sheet${i}/part${i}`;b[i].path=a[i].path;}
+  b[0].sheet='Supply';b[0].pins['1']=['/Supply/VIN'];b[1].path='/replacement-sheet/part1';b[1].pins['1']=['/Supply/Monitor/SENSE'];
+  assert.equal(compare(a,b).stats.changed,1);
+  const report=compare(a,b.slice(0,1));
+  assert.ok(report.nets['main.kicad_pcb::/Power/Monitor/SENSE']);
+});
+test('a removed sheetmate reuses the rename proved by its surviving sheet UUID',()=> {
+  const a=read(board(fp('R1','/Power/VIN'),fp('R2','/Power/VIN'))),b=structuredClone(a.slice(0,1));
+  for(const [i,p] of a.entries()){p.sheet='Power';p.path=`/sheet/part${i}`;}
+  b[0].sheet='Supply';b[0].path=a[0].path;b[0].pins['1']=['/Supply/VIN'];
+  const report=compare(a,b);assert.equal(report.stats.changed,1);assert.equal(report.stats.affected,1);
+  assert.equal(report.parts.find(p=>p.ref==='R1').status,'unchanged');assert.equal(report.parts.find(p=>p.ref==='R2').status,'removed');
+});
