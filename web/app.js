@@ -1,4 +1,14 @@
 import { reach } from "/compare.js";
+import {
+  orderedChanges,
+  propertyPriority,
+  changedPins,
+  changeGroup,
+  isElectrical,
+  padGroups,
+  changedPadNumbers,
+  changedMechanicalPads,
+} from "/review.js";
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, className) => {
   const n = document.createElement(tag);
@@ -16,6 +26,7 @@ const state = {
   view: "map",
   selected: null,
   hover: null,
+  touchPreview: null,
   query: "",
   transitive: false,
   includeGround: false,
@@ -24,6 +35,7 @@ let report,
   parts,
   resize,
   mapSize = "";
+const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
 const shortFile = (file) => file.split("/").at(-1).replace(".kicad_pcb", "");
 const mark = (p) =>
@@ -49,17 +61,21 @@ function inScope(p) {
 function breadcrumb() {
   const nav = $("breadcrumbs");
   nav.replaceChildren();
-  const home = el("button", "⌂ Whole design");
+  const home = el("button", "Whole design");
+  home.title = "All selected boards and sheets";
   home.onclick = () => setScope(null);
   nav.append(home);
   if (state.scope) {
     nav.append(el("span", "/"));
     const board = el("button", shortFile(state.scope.file));
+    board.title = state.scope.file;
     board.onclick = () => setScope({ file: state.scope.file });
     nav.append(board);
     if (state.scope.sheet) {
       nav.append(el("span", "/"));
-      nav.append(el("span", state.scope.sheet));
+      const sheet = el("span", state.scope.sheet);
+      sheet.title = state.scope.sheet;
+      nav.append(sheet);
     }
   }
 }
@@ -95,15 +111,46 @@ function renderList() {
         matches(p) &&
         (!$("only-changed").checked || p.status !== "unchanged"),
     )
-    .sort(
-      (a, b) =>
+    .sort((a, b) => {
+      const order = ["Electrical", "Removed", "Added", "Metadata", "Unchanged"];
+      return (
+        order.indexOf(changeGroup(a)) - order.indexOf(changeGroup(b)) ||
+        changedPins(b).length - changedPins(a).length ||
         a.ref.localeCompare(b.ref, undefined, { numeric: true }) ||
-        a.file.localeCompare(b.file),
-    );
+        a.file.localeCompare(b.file)
+      );
+    });
   $("list-count").textContent = `${shown.length} shown`;
+  let group;
   for (const p of shown) {
-    const row = el("button", undefined, `part-row ${p.status}`);
+    const kind = changeGroup(p);
+    if (kind !== group) {
+      group = kind;
+      const heading = el("h3", undefined, "list-heading");
+      heading.append(
+        el("span", group),
+        el(
+          "span",
+          shown.filter((p) => changeGroup(p) === group).length,
+          "group-count",
+        ),
+      );
+      heading.title =
+        group === "Electrical"
+          ? "Pin nets, pads, value, footprint, population or part identifier changes"
+          : group === "Metadata"
+            ? "Placement, properties, assembly and zero-pad artwork"
+            : group;
+      list.append(heading);
+    }
+    const row = el(
+      "button",
+      undefined,
+      `part-row ${p.status}${isElectrical(p) ? " electrical" : ""}`,
+    );
+    row.dataset.changeGroup = kind;
     row.dataset.id = p.id;
+    row.classList.toggle("selected", state.selected === p.id);
     row.setAttribute(
       "aria-label",
       `${p.ref}, ${p.value}, ${p.status}, ${shortFile(p.file)}`,
@@ -115,15 +162,17 @@ function renderList() {
       el("small", `${p.value || p.footprint} · ${shortFile(p.file)}`),
     );
     if (p.status === "modified") {
-      const fields = p.changes.map(
+      const fields = orderedChanges(p).map(
         (c) =>
-          ({
+          propertyPriority(c) ??
+          {
             pins: "pin nets",
             pads: "pad geometry",
             fields: "properties",
             attributes: "assembly",
             angle: "rotation",
-          })[c.field] ?? c.field,
+          }[c.field] ??
+          c.field,
       );
       const summary = el(
         "small",
@@ -135,6 +184,20 @@ function renderList() {
       meta.append(summary);
     }
     row.append(meta);
+    const rewired = changedPins(p).length;
+    if (rewired) {
+      const count = el(
+        "span",
+        `${rewired} ${rewired === 1 ? "pin" : "pins"}`,
+        "rewired-count",
+      );
+      count.title = `${rewired} numbered ${rewired === 1 ? "pin has" : "pins have"} changed net connectivity`;
+      row.append(count);
+    }
+    row.title = `${p.ref} · ${p.value || p.footprint} · ${p.status}
+${orderedChanges(p)
+  .map((c) => c.field)
+  .join(", ")}`;
     wirePart(row, p);
     list.append(row);
   }
@@ -148,11 +211,36 @@ function renderList() {
     );
 }
 function wirePart(node, p) {
-  node.onmouseenter = () => highlight(p.id);
-  node.onmouseleave = resetImpact;
-  node.onfocus = () => highlight(p.id);
-  node.onblur = resetImpact;
-  node.onclick = () => openDiff(p);
+  let touchClick = false;
+  node.onpointerdown = (event) => {
+    touchClick = event.pointerType === "touch";
+  };
+  node.onpointercancel = () => {
+    touchClick = false;
+  };
+  node.onpointerenter = (event) => {
+    if (event.pointerType !== "touch") highlight(p.id);
+  };
+  node.onpointerleave = (event) => {
+    if (event.pointerType !== "touch" && !state.touchPreview) resetImpact();
+  };
+  node.onfocus = () => {
+    if (!touchClick) highlight(p.id);
+  };
+  node.onblur = () => {
+    if (!state.touchPreview) resetImpact();
+  };
+  node.onclick = (event) => {
+    if (touchClick && event.detail !== 0) {
+      touchClick = false;
+      if (state.touchPreview !== p.id) {
+        state.touchPreview = p.id;
+        highlight(p.id);
+        return;
+      }
+    }
+    openDiff(p);
+  };
 }
 // Balanced binary treemap. Split by cumulative pad count along the longer axis.
 function pack(items, rect, visit, minSize = 0) {
@@ -199,21 +287,42 @@ function position(node, r, gap = 2) {
   });
 }
 function tile(p, r, parent) {
-  const node = el("button", undefined, `tile ${p.status}`);
+  const node = el(
+    "button",
+    undefined,
+    `tile ${p.status}${isElectrical(p) ? " electrical" : ""}`,
+  );
   node.dataset.id = p.id;
   node.dataset.focusKey = `part:${p.id}`;
   position(node, r);
   node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}`);
   node.title = `${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
-  if (r.w > 22 && r.h > 17) {
+  // Measure the whole reference in the loaded utility face. Never render a clipped ID.
+  const available = r.w - 16;
+  const measure = textMetrics;
+  const family = getComputedStyle(document.documentElement).getPropertyValue(
+    "--mono",
+  );
+  let fontSize = 12;
+  for (; fontSize >= 9; fontSize--) {
+    measure.font = `500 ${fontSize}px ${family}`;
+    if (measure.measureText(p.ref).width <= available) break;
+  }
+  if (fontSize >= 9 && r.h - 14 >= fontSize * 1.4) {
     const label = el("span", p.ref, "ref");
-    label.style.fontSize = `${Math.max(7, Math.min(12, (r.w - 13) / (p.ref.length * 0.65)))}px`;
+    label.style.fontSize = `${fontSize}px`;
     node.append(label);
   }
-  if (r.w > 45 && r.h > 40)
+  if (r.w > 65 && r.h > 48)
     node.append(el("span", p.value || p.footprint, "value"));
-  if (r.w > 55 && r.h > 65)
-    node.append(el("span", `${Object.keys(p.pins).length} pads`, "pin-count"));
+  if (r.w > 75 && r.h > 80)
+    node.append(
+      el(
+        "span",
+        `${Object.keys(p.pins).length} ${Object.keys(p.pins).length === 1 ? "pad" : "pads"}`,
+        "pin-count",
+      ),
+    );
   wirePart(node, p);
   parent.append(node);
 }
@@ -222,7 +331,11 @@ function renderMap() {
   root.replaceChildren();
   $("connections").replaceChildren();
   const shown = report.parts.filter((p) => inScope(p) && matches(p));
-  $("scope-count").textContent = `${shown.length} components in view`;
+  const removed = shown.filter((p) => p.status === "removed").length;
+  $("scope-count").textContent =
+    `${shown.length} in view${removed ? ` · ${removed} removed` : ""}`;
+  $("scope-count").title =
+    `${shown.length} components across both revisions, including ${removed} removed in head`;
   $("map-empty").hidden = shown.length > 0;
   const { width: w, height: h } = $("canvas").getBoundingClientRect();
   mapSize = `${w}:${h}`;
@@ -276,9 +389,10 @@ function renderMap() {
         ),
         el(
           "small",
-          `${group.ps.length} ${group.ps.length === 1 ? "part" : "parts"} ↗`,
+          `${group.ps.length} ${group.ps.length === 1 ? "part" : "parts"}`,
         ),
       );
+      title.append(el("span", undefined, "chevron"));
       title.title = groupByBoard
         ? group.key
         : group.key === "/"
@@ -310,7 +424,7 @@ function renderMap() {
       );
       root.append(node);
     },
-    90,
+    w < 500 ? 140 : 90,
   );
 }
 function renderBoard(shown, w, h) {
@@ -373,6 +487,8 @@ function highlight(id) {
     centers.set(tile.dataset.id, {
       x: r.x - root.x + r.width / 2,
       y: r.y - root.y + r.height / 2,
+      w: r.width,
+      h: r.height,
     });
     tile.classList.toggle("hovered", tile.dataset.id === id);
     tile.classList.toggle("affected", affected.has(tile.dataset.id));
@@ -383,18 +499,43 @@ function highlight(id) {
   }
   const svg = $("connections");
   svg.replaceChildren();
-  for (const edge of result.edges) {
-    const a = centers.get(edge.source),
-      b = centers.get(edge.target);
-    if (!a || !b) continue;
-    const d = `M ${a.x} ${a.y} C ${a.x} ${(a.y + b.y) / 2 - 30}, ${b.x} ${(a.y + b.y) / 2 - 30}, ${b.x} ${b.y}`;
+  const visibleEdges = result.edges.filter(
+    (edge) => centers.has(edge.source) && centers.has(edge.target),
+  );
+  const dense = visibleEdges.length > 80;
+  const edges = dense
+    ? visibleEdges.filter(
+        (edge) =>
+          isElectrical(parts.get(edge.target)) ||
+          (edge.source !== id && isElectrical(parts.get(edge.source))),
+      )
+    : visibleEdges;
+  const borderPoint = (a, b) => {
+    const dx = b.x - a.x,
+      dy = b.y - a.y;
+    const scale = Math.min(
+      a.w / 2 / (Math.abs(dx) || 1e-6),
+      a.h / 2 / (Math.abs(dy) || 1e-6),
+    );
+    return { x: a.x + dx * scale, y: a.y + dy * scale };
+  };
+  for (const edge of edges) {
+    const ca = centers.get(edge.source),
+      cb = centers.get(edge.target);
+    const a = borderPoint(ca, cb),
+      b = borderPoint(cb, ca);
+    const bend = Math.min(48, Math.abs(a.x - b.x) * 0.15);
+    const d = `M ${a.x} ${a.y} C ${a.x} ${(a.y + b.y) / 2 - bend}, ${b.x} ${(a.y + b.y) / 2 - bend}, ${b.x} ${b.y}`;
     svg.append(
       svgEl("path", {
         d,
         fill: "none",
-        stroke: "#82bbdf",
-        "stroke-width": 1.4,
-        opacity: 0.42,
+        stroke: "#6cb4ff",
+        "stroke-width": edges.length > 30 ? 0.65 : 1,
+        opacity: Math.max(
+          0.12,
+          Math.min(0.45, 3 / Math.sqrt(edges.length || 1)),
+        ),
       }),
     );
   }
@@ -402,25 +543,37 @@ function highlight(id) {
   const title = `${p.ref} · ${result.ids.length} ${state.transitive ? "transitively reachable parts" : "shared-net neighbors"}`;
   impact(
     title,
-    `${result.nets.length} nets · ${visible} neighbors in view · ${result.ids.length - visible} outside this view. ${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach through components, not signal propagation. " : ""}${result.nets.slice(0, 7).join(" · ")}${result.nets.length > 7 ? " …" : ""}`,
+    `${result.nets.length} nets · ${visible} highlighted in view · ${result.ids.length - visible} outside this view. ${dense ? `${edges.length} curves shown, only links involving electrical, added or removed neighbors. ` : `${edges.length} curves shown. `}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation. " : ""}${result.nets.slice(0, 4).join(" · ")}${result.nets.length > 4 ? " …" : ""}`,
   );
+  if (state.touchPreview === id) {
+    const open = el("button", `Open ${p.ref} diff`, "open-preview");
+    open.onclick = () => openDiff(p);
+    $("impact").append(open);
+  }
 }
+
 function impact(title, text) {
   const box = $("impact");
   box.replaceChildren(el("span", undefined, "impact-dot"));
   const body = el("div");
-  body.append(el("strong", title), el("p", text));
+  const heading = el("strong");
+  const count = title.match(/^(.*? · )(\d+)( .*)$/);
+  if (count)
+    heading.append(count[1], el("span", count[2], "reach-count"), count[3]);
+  else heading.textContent = title;
+  body.append(heading, el("p", text));
   box.append(body);
 }
 function resetImpact() {
+  state.touchPreview = null;
   state.hover = null;
   $("connections").replaceChildren();
   for (const tile of $("tiles").querySelectorAll(".tile"))
     tile.classList.remove("hovered", "affected", "dimmed");
   if (!state.selected)
     impact(
-      "Follow the electrical impact",
-      "Hover or focus a part to see everything sharing its nets, across both revisions. Ground is excluded by default.",
+      "Trace electrical reach",
+      "Hover or focus a component to highlight shared-net neighbors across both revisions. Tap to preview. Ground excluded by default.",
     );
 }
 function format(value) {
@@ -431,6 +584,7 @@ function format(value) {
 function openDiff(p) {
   state.selected = p.id;
   resetImpact();
+  renderList();
   $("map-panel").hidden = true;
   const panel = $("diff-panel");
   panel.hidden = false;
@@ -447,6 +601,40 @@ function openDiff(p) {
       "p",
       `${p.file} · ${p.sheet} · ${p.value || p.footprint}`,
       "diff-subtitle",
+    ),
+  );
+  const pinCount = changedPins(p).length,
+    padCount = changedPadNumbers(p).size;
+  panel.append(
+    el(
+      "p",
+      p.status === "modified"
+        ? `${pinCount ? `${pinCount} ${pinCount === 1 ? "pin rewired" : "pins rewired"}. ` : ""}${orderedChanges(
+            p,
+          )
+            .filter((c) => c.field !== "pins")
+            .map(
+              (c) =>
+                (propertyPriority(c)
+                  ? propertyPriority(c)[0].toUpperCase() +
+                    propertyPriority(c).slice(1)
+                  : null) ??
+                {
+                  pads: "Pad geometry",
+                  fields: "Properties",
+                  x: "X position",
+                  y: "Y position",
+                  angle: "Rotation",
+                }[c.field] ??
+                c.field[0].toUpperCase() + c.field.slice(1),
+            )
+            .join(
+              ", ",
+            )}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount} ${padCount === 1 ? "pad change" : "pad changes"} highlighted.`
+        : p.status === "unchanged"
+          ? "No semantic changes in this component."
+          : `${p.status === "added" ? "Added in head" : "Removed from head"}. All present pads highlighted.`,
+      "diff-summary",
     ),
   );
   const regions = el("div", undefined, "regions");
@@ -474,18 +662,26 @@ function openDiff(p) {
     figure.append(
       el(
         "figcaption",
-        `${key === "before" ? "BASE" : "HEAD"} · local pad region · ${extent.toFixed(1)} mm radius · nonstandard shapes approximate`,
+        `${key === "before" ? "Base" : "Head"} · ${(extent * 2).toFixed(1)} × ${(extent * 2).toFixed(1)} mm`,
       ),
     );
     figure.append(regionSvg(p, key, extent));
     regions.append(figure);
   }
-  panel.append(regions);
+  panel.append(
+    regions,
+    el(
+      "p",
+      "Local pad regions · nonstandard pad shapes approximate",
+      "region-note",
+    ),
+  );
   const table = el("table", undefined, "semantic"),
     tr = el("tr");
   for (const name of ["Field / pin", "Base", "Head"]) tr.append(el("th", name));
   table.append(tr);
-  const row = (field, a, b) => {
+  const geometryTable = table.cloneNode(true);
+  const row = (field, a, b, target = table) => {
     const tr = el("tr");
     tr.append(el("td", field));
     for (const value of [a, b]) {
@@ -493,9 +689,9 @@ function openDiff(p) {
       td.append(el("code", format(value)));
       tr.append(td);
     }
-    table.append(tr);
+    target.append(tr);
   };
-  const changes = p.changes;
+  const changes = orderedChanges(p);
   if (p.before && p.after) {
     for (const c of changes) {
       if (c.field === "pins") {
@@ -510,16 +706,8 @@ function openDiff(p) {
             );
         }
       } else if (c.field === "pads") {
-        const group = (pads) => {
-          const map = new Map();
-          for (const pad of pads) {
-            if (!map.has(pad.number)) map.set(pad.number, []);
-            map.get(pad.number).push(pad);
-          }
-          return map;
-        };
-        const a = group(c.before),
-          b = group(c.after);
+        const a = padGroups(c.before),
+          b = padGroups(c.after);
         const describe = (pads) =>
           pads
             ?.map(
@@ -535,8 +723,15 @@ function openDiff(p) {
               `Pad ${number || "mechanical"} local geometry`,
               describe(a.get(number)),
               describe(b.get(number)),
+              geometryTable,
             );
         }
+      } else if (c.field === "fields") {
+        for (const key of [
+          ...new Set([...Object.keys(c.before), ...Object.keys(c.after)]),
+        ].sort())
+          if (JSON.stringify(c.before[key]) !== JSON.stringify(c.after[key]))
+            row(`Property: ${key}`, c.before[key], c.after[key]);
       } else
         row(
           {
@@ -557,19 +752,45 @@ function openDiff(p) {
     if (!changes.length)
       row("Component", "No semantic changes", "No semantic changes");
   } else {
-    for (const key of ["value", "footprint", "sheet", "side", "fields", "pins"])
-      row(key, p.before?.[key], p.after?.[key]);
+    for (const pin of Object.keys(p.pins).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true }),
+    ))
+      row(
+        `Pin ${pin}`,
+        p.before?.pins[pin]?.join(", "),
+        p.after?.pins[pin]?.join(", "),
+      );
+    for (const key of ["value", "footprint", "sheet", "side"])
+      row(key[0].toUpperCase() + key.slice(1), p.before?.[key], p.after?.[key]);
+    for (const key of Object.keys((p.after ?? p.before).fields).sort())
+      row(`Property: ${key}`, p.before?.fields[key], p.after?.fields[key]);
   }
   panel.append(table);
-  impact(
-    `${p.ref} · ${reach(report, p.id, state).ids.length} connected parts`,
-    "The diff compares footprint properties and numbered pad connectivity. Local regions show pads and nearby footprints. Copper tracks, zones and DRC/ERC are outside this review.",
-  );
+  if (geometryTable.rows.length > 1) {
+    const details = el("details", undefined, "geometry-details");
+    details.append(
+      el(
+        "summary",
+        `Changed pad geometry · ${geometryTable.rows.length - 1} ${geometryTable.rows.length === 2 ? "pad" : "pads"}`,
+      ),
+      geometryTable,
+    );
+    panel.append(details);
+  }
+  panel.scrollTop = 0;
+  inspectorImpact(p);
   close.focus();
+}
+function inspectorImpact(p) {
+  impact(
+    `${p.ref} · ${reach(report, p.id, state).ids.length} ${state.transitive ? "transitively reachable parts" : "connected parts"}`,
+    `Pad geometry, connectivity and footprint properties, compared across base and head. White pads are unchanged; red and green pads changed. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
+  );
 }
 function closeDiff() {
   const id = state.selected;
   state.selected = null;
+  renderList();
   $("diff-panel").hidden = true;
   $("map-panel").hidden = false;
   renderMap();
@@ -594,6 +815,9 @@ function regionSvg(selected, key, extent) {
     "aria-label": `${key} pad region for ${selected.ref}`,
   });
   const anchor = selected[key];
+  const changed = changedPadNumbers(selected);
+  const mechanical = changedMechanicalPads(selected, key);
+  const regionHeight = matchMedia("(max-width: 700px)").matches ? 140 : 180;
   if (!anchor) {
     const label = svgEl("text", {
       "text-anchor": "middle",
@@ -605,6 +829,7 @@ function regionSvg(selected, key, extent) {
     svg.append(label);
     return svg;
   }
+  const annotations = [];
   for (const p of report.parts) {
     const part = p[key];
     if (!part || part.file !== anchor.file) continue;
@@ -615,12 +840,17 @@ function regionSvg(selected, key, extent) {
       const pos = padPosition(part, pad),
         x = dx + pos.x,
         y = dy + pos.y;
+      const edited =
+        p.id === selected.id &&
+        (pad.number ? changed.has(pad.number) : mechanical.has(pad));
       const color =
         p.id === selected.id
-          ? key === "before"
-            ? "#e98496"
-            : "#6fdbb0"
-          : "#3d5666";
+          ? edited
+            ? key === "before"
+              ? "#f0708a"
+              : "#3ecf98"
+            : "#d6dfe5"
+          : "#36414a";
       const rect = svgEl("rect", {
         x: x - pad.w / 2,
         y: y - pad.h / 2,
@@ -636,9 +866,15 @@ function regionSvg(selected, key, extent) {
               )
             : 0,
         fill: color,
+        "data-pad": pad.number,
+        "data-selected": p.id === selected.id,
+        "data-changed": edited,
         opacity: p.id === selected.id ? 0.9 : 0.4,
         transform: `rotate(${-pad.angle} ${x} ${y})`,
       });
+      const padTitle = svgEl("title");
+      padTitle.textContent = `${p.ref} · pad ${pad.number || "mechanical"}${edited ? " · changed" : ""}`;
+      rect.append(padTitle);
       svg.append(rect);
       if (pad.drill?.length) {
         const oval = pad.drill[0] === "oval",
@@ -653,7 +889,7 @@ function regionSvg(selected, key, extent) {
             width: dw,
             height: dh,
             rx: Math.min(dw, dh) / 2,
-            fill: "#0e171e",
+            fill: "#0a0d10",
             stroke: color,
             "stroke-width": 0.08,
             transform: `rotate(${-pad.angle} ${x} ${y})`,
@@ -662,28 +898,61 @@ function regionSvg(selected, key, extent) {
           svg.append(hole);
         }
       }
-      if (p.id === selected.id && pad.number) {
+      const labelSize = (extent * 2 * 11) / regionHeight;
+      if (
+        p.id === selected.id &&
+        pad.number &&
+        labelSize <= pad.h * 0.8 &&
+        labelSize * pad.number.length * 0.65 <= pad.w * 0.8
+      ) {
         const text = svgEl("text", {
           x,
-          y: y + 0.17,
+          y: y + labelSize * 0.35,
           "text-anchor": "middle",
           fill: "#0d171e",
-          "font-size": Math.min(0.65, pad.h * 0.65),
+          "font-size": labelSize,
         });
         text.textContent = pad.number;
         svg.append(text);
       }
     }
     if (p.id !== selected.id) {
-      const label = svgEl("text", {
-        x: dx,
-        y: dy - 1,
-        fill: "#7c929f",
-        "font-size": extent / 24,
-        "text-anchor": "middle",
-      });
-      label.textContent = p.ref;
-      svg.append(label);
+      const fontSize = (extent * 2 * 11) / regionHeight;
+      const width = p.ref.length * fontSize * 0.65,
+        height = fontSize * 1.3;
+      const box = {
+        x: dx - width / 2,
+        y: dy - 1 - height,
+        w: width,
+        h: height,
+      };
+      // Keep contextual IDs whole, outside the selected pad region and apart from each other.
+      const outsideSelected =
+        Math.abs(dx) > extent * 0.75 || Math.abs(dy) > extent * 0.75;
+      const fits =
+        box.x >= -extent &&
+        box.y >= -extent &&
+        box.x + box.w <= extent &&
+        box.y + box.h <= extent;
+      const overlaps = annotations.some(
+        (r) =>
+          box.x < r.x + r.w &&
+          box.x + box.w > r.x &&
+          box.y < r.y + r.h &&
+          box.y + box.h > r.y,
+      );
+      if (outsideSelected && fits && !overlaps) {
+        const label = svgEl("text", {
+          x: dx,
+          y: dy - 1,
+          fill: "#6f7c86",
+          "font-size": fontSize,
+          "text-anchor": "middle",
+        });
+        label.textContent = p.ref;
+        svg.append(label);
+        annotations.push(box);
+      }
     }
   }
   return svg;
@@ -694,6 +963,7 @@ async function init() {
     if (!response.ok)
       throw new Error(`Report request returned ${response.status}`);
     report = await response.json();
+    await document.fonts.load('12px "Boardmap Mono"');
     parts = new Map(report.parts.map((p) => [p.id, p]));
     $("revision").textContent =
       `${report.base.slice(0, 8)} → ${report.head.slice(0, 8)}`;
@@ -701,14 +971,12 @@ async function init() {
       report.boards.length === 1
         ? report.boards[0]
         : `${report.boards.length} boards · ${report.boards.map(shortFile).join(" / ")}`;
+    $("project").title = report.boards.join("\n");
     $("change-count").textContent = report.stats.changed;
     if (report.sheetRenames?.length) {
       const details = el("details", undefined, "sheet-renames");
       details.append(
-        el(
-          "summary",
-          `${report.sheetRenames.length} sheet labels renamed · net prefixes normalized where unambiguous`,
-        ),
+        el("summary", `${report.sheetRenames.length} sheet labels renamed`),
       );
       const list = el("ul");
       for (const rename of report.sheetRenames)
@@ -719,26 +987,41 @@ async function init() {
     for (const [key, label] of [
       ["parts", "parts"],
       ["nets", "nets"],
-      ["sheets", "sheets"],
+      ["electrical", "electrical"],
       ["changed", "changed"],
       ["affected", "affected"],
     ]) {
-      const box = el(
-        "div",
-        undefined,
-        ["changed", "affected"].includes(key) ? "accent" : "",
+      const box = el("div", undefined, key);
+      box.append(
+        el(
+          "strong",
+          key === "electrical"
+            ? report.parts.filter(isElectrical).length
+            : report.stats[key],
+        ),
+        el("span", label),
       );
-      box.append(el("strong", report.stats[key]), el("span", label));
       box.title =
         key === "affected"
           ? "Unchanged direct shared-net neighbors of changed parts, excluding ground, across both revisions."
-          : key === "parts"
-            ? "Parts in head; removed parts remain visible in the map."
-            : "";
+          : key === "electrical"
+            ? "Pin nets, pads, value, footprint, population or part identifier changes, plus added and removed parts with pads. Zero-pad artwork is metadata."
+            : key === "parts"
+              ? "Parts in head; removed parts remain visible in the map."
+              : "";
       $("stats").append(box);
     }
     $("selection").textContent =
-      `${report.selection} · ${report.boards.length} / ${report.availableBoards.length} boards`;
+      `${report.boards.length} of ${report.availableBoards.length} ${report.availableBoards.length === 1 ? "board" : "boards"} selected${report.selection === "changed boards" ? " · changed boards" : ""}`;
+    $("toggle-changes").onclick = () => {
+      const expanded =
+        $("toggle-changes").getAttribute("aria-expanded") !== "true";
+      $("toggle-changes").setAttribute("aria-expanded", expanded);
+      $("toggle-changes").textContent = expanded
+        ? "Hide changes"
+        : "Show changes";
+      document.querySelector("aside").classList.toggle("expanded", expanded);
+    };
     $("search").oninput = (e) => {
       state.query = e.target.value.trim().toLowerCase();
       renderList();
@@ -750,11 +1033,13 @@ async function init() {
     $("only-changed").onchange = renderList;
     $("reach").onchange = (e) => {
       state.transitive = e.target.value === "transitive";
-      if (state.hover) highlight(state.hover);
+      if (state.selected) inspectorImpact(parts.get(state.selected));
+      else if (state.hover) highlight(state.hover);
     };
     $("ground").onchange = (e) => {
       state.includeGround = e.target.checked;
-      if (state.hover) highlight(state.hover);
+      if (state.selected) inspectorImpact(parts.get(state.selected));
+      else if (state.hover) highlight(state.hover);
     };
     for (const [id, view] of [
       ["map-tab", "map"],
@@ -763,6 +1048,11 @@ async function init() {
       $(id).onclick = () => {
         state.view = view;
         $(id).classList.add("active");
+        $(id).setAttribute("aria-pressed", "true");
+        $(id === "map-tab" ? "board-tab" : "map-tab").setAttribute(
+          "aria-pressed",
+          "false",
+        );
         $(id === "map-tab" ? "board-tab" : "map-tab").classList.remove(
           "active",
         );
@@ -788,7 +1078,8 @@ async function init() {
           : null;
         mapSize = size;
         renderMap();
-        resetImpact();
+        if (state.hover) highlight(state.hover);
+        else resetImpact();
         if (focusKey)
           [...$("tiles").querySelectorAll("button")]
             .find((button) => button.dataset.focusKey === focusKey)
@@ -799,6 +1090,7 @@ async function init() {
     breadcrumb();
     renderList();
     renderMap();
+    resetImpact();
   } catch (error) {
     $("project").textContent =
       `Could not load this review. ${error.message}. Restart boardmap and reload this page.`;

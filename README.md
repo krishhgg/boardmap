@@ -4,7 +4,7 @@ See what a PCB change touches.
 
 A local, whole-design map for KiCad git reviews. Hover a part to trace its shared nets. Click it to inspect value, footprint, manufacturing fields, and pin-net changes, with before/after pad regions.
 
-![Corne PR review, map to electrical reach to part diff](https://raw.githubusercontent.com/krishhgg/boardmap/7db8a5ae290a2bf6c27f6a4d10f0da4b73727b0e/docs/media/boardmap-demo.gif)
+![Corne PR review, map to electrical reach to part diff](https://raw.githubusercontent.com/krishhgg/boardmap/eaf8111462563f07552786e5129b4a4844fb1393/docs/media/instrument/boardmap-demo.gif)
 
 ## Run it
 
@@ -29,15 +29,16 @@ By default, it includes every component in boards whose files changed. If no boa
 
 ## Review the electrical impact
 
-- The map groups parts by board and the schematic sheet names stored on footprints. Area follows numbered pad count, with a minimum size for small parts and sheet controls. Unchanged parts stay muted; modified parts are orange; additions are green; removals are striped pink.
+- The map groups parts by board and the schematic sheet names stored on footprints. Area follows numbered pad count, with a minimum size for small parts and sheet controls. Unchanged parts stay muted. Pin, pad, value, footprint, population and existing part-number replacements get solid orange; other modifications have neutral fill and an orange edge. Additions are green; removals are striped pink.
 - Hover or keyboard-focus any part, in the map or sidebar, to trace shared-net neighbors. Both revisions contribute connections, so disconnecting or removing a part still shows its former neighbors. Power nets connect a regulator to every part on that rail. Ground is excluded by name by default and can be included.
-- Direct reach follows one net hop. Transitive reach walks through components and their nets. This is structural adjacency across both revisions, not circuit simulation or a claim that signals pass through an IC. Large transitive results can span most of a board.
+- On touch screens, tap once to preview reach, then tap the same part again or use its Open diff action to inspect. The changes list can be expanded above the map.
+- Direct reach follows one net hop. Transitive reach walks through components and their nets. This is structural adjacency across both revisions, not circuit simulation or a claim that signals pass through an IC. Large transitive results can span most of a board. Above 80 visible links, curves show only links involving electrical, added or removed neighbors. Every reachable neighbor stays highlighted, and the readout states the highlighted and curve counts.
 - Click a sheet to zoom, use breadcrumbs to return, or switch to component centers in Board layout. Each board has its own chooser when a repository contains multiple designs.
-- Click a part for its semantic diff and local pad regions. Press Escape or Back to map to return. Search by reference, value, footprint, or net. The sidebar follows the current board or sheet, sorts references numerically and names changed fields. The Changed only filter does not hide unchanged context in the map.
+- Click a part for its semantic diff and local pad regions. Press Escape or Back to map to return. Search by reference, value, footprint, or net. The sidebar follows the current board or sheet. Electrical edits come first, sorted by rewired-pin count and then natural reference order, followed by Removed, Added and Metadata groups. Zero-pad artwork stays in Metadata with its original added or removed status. Pin rows lead the inspector; changed property keys have individual rows, and changed pad geometry is available in a disclosure. The Changed only filter does not hide unchanged context in the map.
 
-The stats count head parts and nets, sheet groups across both revisions, and changed components including removals. Affected means unchanged direct neighbors of changed parts, excluding ground, across either revision. It is independent of the current hover and reach controls. Stable sheet UUIDs identify label renames. Boardmap reports these separately and normalizes old hierarchical net prefixes only when the mapping is unambiguous and does not merge distinct historical nets. Real rewires remain in the pin diff. Footprint rotations compare pad angles relative to the footprint, so rotation alone does not create a pad dump.
+The header counts head parts and nets, electrical changes and all changed components including removals. Electrical changes include parts with pin, pad, value or footprint edits, DNP population transitions, replacements of both-present MPN / Part Number / Manufacturer Part Number identifiers, and added or removed parts with pads. Filling an empty supplier or descriptive field alone stays in Metadata. The in-view total includes removed components and names their count separately. Affected means unchanged direct neighbors of changed parts, excluding ground, across either revision. It is independent of the current hover and reach controls. Stable sheet UUIDs identify label renames. Boardmap reports these separately and normalizes old hierarchical net prefixes only when the mapping is unambiguous and does not merge distinct historical nets. Real rewires remain in the pin diff. Footprint rotations compare pad angles relative to the footprint, so rotation alone does not create a pad dump.
 
-![Shared-net reach on the real Corne PR](https://raw.githubusercontent.com/krishhgg/boardmap/7db8a5ae290a2bf6c27f6a4d10f0da4b73727b0e/docs/media/corne/reach.png)
+![Shared-net reach on the real Corne PR](https://raw.githubusercontent.com/krishhgg/boardmap/eaf8111462563f07552786e5129b4a4844fb1393/docs/media/instrument/demo-frames/03-reach.png)
 
 ## Try the real PRs
 
@@ -52,21 +53,21 @@ node scripts/demo.mjs hackrf
 
 Each command fetches two pinned commits into a per-user cache, without a checkout, then starts the local UI. Stop one review with Ctrl+C before running the next. The cache is under your home directory in `.cache/boardmap/demos` and can be deleted after use. Only the first fetch requires internet if you keep the git objects and run the CLI directly.
 
-| Source PR | Comparison | Head parts | Changed | Unchanged affected |
-| --- | --- | ---: | ---: | ---: |
-| [HackRF #1411, HackRF One r10](https://github.com/greatscottgadgets/hackrf/pull/1411) | `f6598e7b..3bdc5547`, changed board | 437 | 390 | 61 |
-| [Corne #237, v4.1.0](https://github.com/foostan/crkbd/pull/237) | `a935f345..eaf6e072`, cherry board | 180 | 18 | 102 |
+| Source PR                                                                             | Comparison                          | Head parts | Changed | Unchanged affected |
+| ------------------------------------------------------------------------------------- | ----------------------------------- | ---------: | ------: | -----------------: |
+| [HackRF #1411, HackRF One r10](https://github.com/greatscottgadgets/hackrf/pull/1411) | `f6598e7b..3bdc5547`, changed board |        437 |     390 |                 61 |
+| [Corne #237, v4.1.0](https://github.com/foostan/crkbd/pull/237)                       | `a935f345..eaf6e072`, cherry board  |        180 |      18 |                102 |
 
-The Corne PR changes both cherry and chocolate boards. Without `--board`, its report includes 360 head parts and 30 changed parts. The demo script selects cherry for a smaller review. See [all captures](docs/media), including HackRF and mobile layouts. Captures are actual Chromium runs, not mockups.
+The Corne PR changes both cherry and chocolate boards. Without `--board`, its report includes 360 head parts and 30 changed parts. The demo script selects cherry for a smaller review. See [instrument captures](docs/media/instrument), including HackRF and mobile layouts. Captures are actual Chromium runs, not mockups.
 
 ## Where it fits
 
-| Tool | Review focus |
-| --- | --- |
-| boardmap | Local whole-design map and shared-net impact, including removed connections and opt-in transitive reach |
-| [KiRI](https://github.com/leoheck/kiri) | Visual comparison of KiCad schematic and PCB revisions |
-| [KiCAD-Prism](https://github.com/krishna-swaroop/KiCAD-Prism) | Self-hosted collaboration, project viewing, and component governance |
-| [KiCad Viewer](https://www.kicadviewer.com/pull-requests) | Visual and semantic PR diffs in its viewer |
+| Tool                                                          | Review focus                                                                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| boardmap                                                      | Local whole-design map and shared-net impact, including removed connections and opt-in transitive reach |
+| [KiRI](https://github.com/leoheck/kiri)                       | Visual comparison of KiCad schematic and PCB revisions                                                  |
+| [KiCAD-Prism](https://github.com/krishna-swaroop/KiCAD-Prism) | Self-hosted collaboration, project viewing, and component governance                                    |
+| [KiCad Viewer](https://www.kicadviewer.com/pull-requests)     | Visual and semantic PR diffs in its viewer                                                              |
 
 Use boardmap to answer "what else shares these nets?" before inspecting layout detail in KiCad or another visual diff tool.
 
@@ -99,9 +100,11 @@ To reproduce real-data captures after fetching the demos:
 node scripts/demo.mjs hackrf --json /tmp/hackrf-review.json
 npm run test:e2e -- --repo "$HOME/.cache/boardmap/demos/hackrf" \
   --base f6598e7b14b7ec539126479e9c6d095c668a534e \
-  --head 3bdc5547004c8244de5f37104410c363854e5634 --out docs/media/hackrf
+  --head 3bdc5547004c8244de5f37104410c363854e5634 --out docs/media/instrument/hackrf
 ```
 
-The demo command prints its cache path. The synthetic `--fixture` browser run creates a private temporary git repository with two commits, nine boards, and modified, added and removed components, then deletes it. It also checks focus after resizing a diff and clipping of diagonal pads. The e2e test starts an ephemeral loopback server, checks the map, reach modes, ground toggle, diff, drill-in, breadcrumbs, search, every board chooser, and mobile overflow, then closes it. `--out` writes screenshots.
+The demo command prints its cache path. The synthetic `--fixture` browser run creates a private temporary git repository with two commits, nine boards, and modified, added and removed components, then deletes it. It also checks focus after resizing a diff, clipping of diagonal pads, changed-only pad colors, and the changed drill geometry disclosure. The e2e test starts an ephemeral loopback server, checks the map, reach modes, ground toggle, diff, drill-in, breadcrumbs, search, every board chooser, and mobile overflow, then closes it. `--out` writes 1440×900 and 1280×800 captures plus 390×844 touch states. The browser checks the actual rendered mono font through CDP, complete reference labels, sidebar priority and counts, full neighbor highlights, and touch preview before inspection. Run `node scripts/capture-demo.mjs PATH_TO_CORNE_CACHE --gif` to refresh the eight-second ZD1 GIF with FFmpeg.
+
+The bundled JetBrains Mono font uses the SIL Open Font License; its notice is in [assets/fonts/OFL.txt](assets/fonts/OFL.txt). Fonts and the shared header/favicon mark are served by fixed local asset routes. Screenshots and the GIF are excluded from the installed package.
 
 MIT license for boardmap. Real-world test boards and their notices have separate licenses under [test/fixtures](test/fixtures/README.md). Demo screenshots contain design data from those upstream projects.
