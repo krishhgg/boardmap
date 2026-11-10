@@ -60,7 +60,9 @@ function tile(p,r,parent) {
   const node=el('button',undefined,`tile ${p.status}`); node.dataset.id=p.id; position(node,r);
   node.setAttribute('aria-label',`${p.ref}, ${p.value}, ${p.status}`);
   node.title=`${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
-  if (r.w>22 && r.h>14) node.append(el('span',p.ref,'ref'));
+  if (r.w>22 && r.h>17) {
+    const label=el('span',p.ref,'ref'); label.style.fontSize=`${Math.max(7,Math.min(12,(r.w-13)/(p.ref.length*.65)))}px`; node.append(label);
+  }
   if (r.w>45 && r.h>40) node.append(el('span',p.value || p.footprint,'value'));
   if (r.w>55 && r.h>65) node.append(el('span',`${Object.keys(p.pins).length} pads`,'pin-count'));
   wirePart(node,p); parent.append(node);
