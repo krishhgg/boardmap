@@ -12,6 +12,8 @@ Actual Chromium captures of the pinned real-board comparisons. Each run starts a
 | `hackrf/touch-reach.png`, `corne/touch-reach.png` | 390×844  | First-tap reach preview and explicit inspect action                      |
 | `hackrf/touch-diff.png`, `corne/touch-diff.png`   | 390×844  | Inspector opened through the touch action                                |
 
+`header-1024.png` checks the visible electrical headline at laptop width. `keyboard-focus.png` shows roving keyboard selection and reach. HackRF's `u17-inspector.png` places the replacement context above its 51 changed pin rows.
+
 `sheet.png` and `board.png` capture drill-in and footprint-center views during the browser regression. `mobile.png` is the ordinary browser's mobile-width state. The `touch-*` captures use a separate context with `hasTouch: true` and `isMobile: true`.
 
 The header's electrical total includes high-priority modifications plus added and removed parts with pads. Raw statuses remain intact. Zero-pad artwork is grouped as metadata, so the grouped removed/added counts can differ from raw status counts.
@@ -21,7 +23,7 @@ The header's electrical total includes high-priority modifications plus added an
 | HackRF       |        437 |                        469 |     390 |                       73 |            29 |           9 |            279 |                     111 |
 | Corne cherry |        180 |                        184 |      18 |                        6 |             2 |           4 |              6 |                      12 |
 
-HackRF's first electrical rows are U17 with 51 rewired pins, U19 with 19 and U23 with 15. The numbers come from changed numbered pin-net assignments across both revisions. Population transitions and both-present part identifier replacements also qualify for this tier. Verified legacy assembly-metadata migrations and explicitly flagged unconnected fiducials are quiet metadata; raw changes and reach remain unchanged. See ../../assembly-priority.md. DNP and identifier rules have focused unit assertions.
+HackRF's first electrical rows are U17 with 51 rewired pins, U19 with 19 and U23 with 15. The numbers come from changed numbered pin-net assignments across both revisions. Population transitions and both-present part identifier replacements also qualify for this tier. Verified legacy assembly-metadata migrations and explicitly flagged unconnected fiducials are quiet metadata; raw changes and reach remain unchanged. See [assembly priority](../../assembly-priority.md). DNP and identifier rules have focused unit assertions.
 
 ## Reproduce
 
