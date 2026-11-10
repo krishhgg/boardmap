@@ -5,8 +5,8 @@ import {parseArgs} from 'node:util';
 import {buildReport} from '../src/git.js';
 import {serve} from '../src/server.js';
 import {reviewFixture} from './fixture.mjs';
-const {values} = parseArgs({options:{repo:{type:'string'},base:{type:'string'},head:{type:'string'},board:{type:'string'},out:{type:'string'},fixture:{type:'boolean'}}});
-const fixture=values.fixture?reviewFixture():null;
+const {values} = parseArgs({options:{repo:{type:'string'},base:{type:'string'},head:{type:'string'},board:{type:'string'},out:{type:'string'},fixture:{type:'boolean'},removed:{type:'boolean'}}});
+const fixture=values.fixture?reviewFixture({removedOnly:values.removed}):null;
 const report=buildReport(fixture?.repo ?? values.repo ?? '.',fixture?.base ?? values.base ?? 'HEAD',fixture?.head ?? values.head ?? 'HEAD',{board:values.board});
 const server=await serve(report), browser=await chromium.launch({executablePath:process.env.BOARDMAP_BROWSER || undefined});
 const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
@@ -21,7 +21,7 @@ try {
   assert.equal(await page.locator('.part-row').count(),report.stats.changed);
   await capture('map');
   // Pick a large, connected part so screenshots and assertions cover real geometry.
-  const candidate=[...report.parts].filter(p=>p.after).sort((a,b)=>Object.keys(b.pins).length-Object.keys(a.pins).length)[0];
+  const candidate=(report.parts.some(p=>p.after)?report.parts.filter(p=>p.after):[...report.parts]).sort((a,b)=>Object.keys(b.pins).length-Object.keys(a.pins).length)[0];
   const tile=page.locator('.tile').filter({has:page.locator('span.ref',{hasText:new RegExp(`^${candidate.ref.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`)})}).first();
   await tile.hover();
   assert.ok(await page.locator('#connections path').count()>0,'hover draws net paths');
@@ -62,7 +62,8 @@ try {
       await page.keyboard.press('Escape');
     }
   }
-  await page.locator('.group-title').first().click();
+  await page.locator('.group-title').first().press('Enter');
+  assert.ok(await page.evaluate(()=>document.activeElement.classList.contains('tile')),'keyboard drill-in focuses the new map');
   assert.ok(await page.locator('.tile').count()<=report.parts.length);
   assert.match(await page.locator('#breadcrumbs').innerText(),/\//);
   await capture('sheet');
@@ -79,7 +80,8 @@ try {
     const choices=page.locator('.board-chooser button');
     assert.equal(await choices.count(),report.boards.length);
     for(const file of report.boards) {
-      await page.getByRole('button',{name:file,exact:true}).click();
+      await page.getByRole('button',{name:file,exact:true}).press('Enter');
+      assert.ok(await page.evaluate(()=>document.activeElement.classList.contains('tile')),'board choice preserves keyboard focus');
       const ids=await page.locator('.tile').evaluateAll(nodes=>nodes.map(n=>n.dataset.id).sort());
       assert.deepEqual(ids,report.parts.filter(p=>p.file===file).map(p=>p.id).sort());
       await page.locator('#breadcrumbs button').first().click();

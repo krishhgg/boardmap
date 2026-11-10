@@ -20,7 +20,7 @@ function breadcrumb() {
     if (state.scope.sheet) { nav.append(el('span','/')); nav.append(el('span',state.scope.sheet)); }
   }
 }
-function setScope(scope) { state.scope=scope; state.selected=null; $('diff-panel').hidden=true; $('map-panel').hidden=false; breadcrumb(); renderMap(); resetImpact(); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) $('tiles').animate([{opacity:.4,transform:'scale(.98)'},{opacity:1,transform:'scale(1)'}],{duration:180,easing:'ease-out'}); }
+function setScope(scope) { state.scope=scope; state.selected=null; $('diff-panel').hidden=true; $('map-panel').hidden=false; breadcrumb(); renderMap(); resetImpact(); ($('tiles').querySelector('.tile, .board-chooser button') ?? $('breadcrumbs').querySelector('button')).focus(); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) $('tiles').animate([{opacity:.4,transform:'scale(.98)'},{opacity:1,transform:'scale(1)'}],{duration:180,easing:'ease-out'}); }
 function renderList() {
   const list=$('part-list'); list.replaceChildren();
   const shown = report.parts.filter(p=>matches(p) && (!$('only-changed').checked || p.status!=='unchanged'));
