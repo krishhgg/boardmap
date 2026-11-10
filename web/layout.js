@@ -34,20 +34,28 @@ export function pack(items, rect, visit, minSize = 0) {
     );
   }
 }
-// Grow a drilled phone map until every component has a 32px hit target.
-export function touchSheetHeight(items, width) {
+// Grow a drilled sheet until its hit targets and reference labels fit.
+export function sheetHeight(
+  items,
+  width,
+  { minHeight = 380, minSide = 32, fits = () => true } = {},
+) {
   const usableWidth = Math.max(1, width - 8);
   const total = items.reduce((sum, item) => sum + item.weight, 0);
   const smallest = Math.min(...items.map((item) => item.weight));
-  let height = Math.max(380, Math.ceil(total / smallest * 1600 / usableWidth) + 8);
+  let height = Math.max(
+    minHeight,
+    Math.ceil(total / smallest * (minSide + 8) ** 2 / usableWidth) + 8,
+  );
   // A column bounds growth even for an unusually uneven pin distribution.
   const limit = Math.max(height, Math.ceil(total / smallest * usableWidth) + 8);
   for (;;) {
-    let side = Infinity;
-    pack(items, { x: 4, y: 4, w: usableWidth, h: height - 8 }, (_, rect) => {
-      side = Math.min(side, rect.w - 4, rect.h - 4);
+    let allFit = true;
+    pack(items, { x: 4, y: 4, w: usableWidth, h: height - 8 }, (item, rect) => {
+      if (Math.min(rect.w - 4, rect.h - 4) < minSide || !fits(item, rect))
+        allFit = false;
     });
-    if (side >= 32 || height >= limit) return height;
+    if (allFit || height >= limit) return height;
     height = Math.min(limit, Math.ceil(height * 1.2));
   }
 }

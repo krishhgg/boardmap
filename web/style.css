@@ -577,6 +577,12 @@ main:has(#diff-panel:not([hidden])) > #impact {
   flex: 1;
   min-height: 0;
 }
+@media (min-width: 701px) {
+  #map-panel {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+}
 #canvas {
   position: relative;
   flex: 1;
@@ -648,6 +654,7 @@ main:has(#diff-panel:not([hidden])) > #impact {
 }
 .tile {
   position: absolute;
+  -webkit-tap-highlight-color: transparent;
   background: var(--tile);
   border: 1px solid var(--line);
   border-radius: 2px;

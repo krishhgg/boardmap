@@ -18,6 +18,7 @@ const { values } = parseArgs({
     removed: { type: "boolean" },
     navigation: { type: "boolean" },
     detail: { type: "boolean" },
+    continuity: { type: "boolean" },
   },
 });
 const fixture = values.fixture
@@ -52,8 +53,13 @@ const detailCaptures = new Set([
   "readout-1280", "readout-1024",
   "board-neighbor-return",
 ]);
+const continuityCaptures = new Set([
+  "returned-part", "board-neighbor-return", "readable-sheet", "readable-root", "touch-return", "touch-root",
+]);
 const shouldCapture = (name) =>
-  out && (values.detail
+  out && (values.continuity
+    ? continuityCaptures.has(name)
+    : values.detail
     ? detailCaptures.has(name)
     : !values.navigation || selectedCaptures.has(name));
 const capture = async (name) => {
@@ -92,6 +98,25 @@ const assertReturnedPart = async (surface, id) => {
   const part = report.parts.find((p) => p.id === id);
   assert.ok((await surface.locator("#impact strong").first().innerText()).startsWith(`${part.ref} ·`),
     "the returned component is named in the reach readout");
+};
+const assertSheetReferences = async (surface) => {
+  const failures = await surface.locator(".tile").evaluateAll((nodes) => {
+    const bad = [];
+    for (const tile of nodes) {
+      const ref = tile.title.split(" · ")[0];
+      if (!ref.trim()) continue;
+      const label = tile.querySelector(".ref");
+      if (!label) { bad.push(`${ref}: missing`); continue; }
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      const text = range.getBoundingClientRect(), box = tile.getBoundingClientRect();
+      if (parseFloat(getComputedStyle(label).fontSize) < 9 ||
+          text.right > box.right - 3 || text.bottom > box.bottom - 3)
+        bad.push(`${ref}: clipped`);
+    }
+    return bad;
+  });
+  assert.deepEqual(failures, [], "every drilled reference is whole and readable");
 };
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
@@ -409,7 +434,7 @@ try {
   const paths = await page.locator("#connections path").count();
   assert.match(
     await page.locator("#impact").innerText(),
-    new RegExp(`${paths} curves shown`),
+    new RegExp(`${paths} ${paths === 1 ? "curve" : "curves"} shown`),
   );
   // Move into the real gutter outside this tile, while staying inside the canvas.
   await page.locator("#search").focus();
@@ -573,6 +598,7 @@ try {
   assert.equal(await page.locator("#diff-panel").getAttribute("data-id"), reachedId);
   await page.locator(".close-diff").click();
   await assertReturnedPart(page, reachedId);
+  await capture("returned-part");
   await tile.click();
   assert.ok((await page.locator(".semantic tr").count()) > 1);
   if (values.fixture) {
@@ -889,6 +915,42 @@ try {
   );
   await capture("board");
   await page.locator("#map-tab").click();
+  if (report.boards.length === 1) {
+    await page.locator("#breadcrumbs button").first().click();
+    const sheets = await page.locator(".group-title").evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("aria-label")),
+    );
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 1024, height: 720 }]) {
+      await page.setViewportSize(viewport);
+      for (const name of sheets) {
+        await page.getByRole("button", { name, exact: true }).click();
+        await assertSheetReferences(page);
+        const target = page.locator(".tile").last();
+        await target.scrollIntoViewIfNeeded();
+        await page.mouse.move(1, 1);
+        await previewSettled(null);
+        if (viewport.width === 1280) {
+          if (name === sheets[0]) await capture("readable-sheet");
+          if (name === "Open Root sheet") await capture("readable-root");
+        }
+        await hoverPart(target);
+        const before = await target.boundingBox();
+        const scroll = await page.locator("#map-panel").evaluate((node) => node.scrollTop);
+        const id = await target.getAttribute("data-id");
+        await target.click();
+        await page.locator(".close-diff").click();
+        await assertReturnedPart(page, id);
+        const after = await target.boundingBox();
+        const returnedScroll = await page.locator("#map-panel").evaluate((node) => node.scrollTop);
+        assert.ok(Math.abs(after.y - before.y) <= 1,
+          `Back keeps the selected component in place: ${JSON.stringify({ name, viewport, before, after, scroll, returnedScroll })}`);
+        assert.ok(Math.abs(returnedScroll - scroll) <= 1);
+        assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight),
+          "desktop sheets scroll inside the map instead of the page");
+        await page.locator("#breadcrumbs button").first().click();
+      }
+    }
+  }
   for (const width of [720, 800, 390]) {
     await page.setViewportSize({ width, height: 844 });
     if (report.sheetRenames?.length) {
@@ -1147,11 +1209,28 @@ try {
     await touchPage.locator(".close-diff").tap();
     assert.equal(await touchPage.evaluate(() => document.activeElement.dataset.id), smallest.id);
     await assertReturnedPart(touchPage, smallest.id);
+    await touchCapture("touch-return");
     const restored = await small.boundingBox();
     assert.ok(restored.y >= 0 && restored.y + restored.height <= 844,
       "Back restores the selected target inside the long sheet map");
   }
 
+  if (report.boards.length === 1) {
+    await touchPage.locator("#breadcrumbs button").first().tap();
+    const names = await touchPage.locator(".group-title").evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("aria-label")),
+    );
+    for (const name of names) {
+      await touchPage.getByRole("button", { name, exact: true }).tap();
+      await assertSheetReferences(touchPage);
+      if (name === "Open Root sheet") {
+        await touchPage.locator(".tile").last().tap();
+        await assertReadoutFits(touchPage);
+        await touchCapture("touch-root");
+      }
+      await touchPage.locator("#breadcrumbs button").first().tap();
+    }
+  }
   await touch.close();
   if (values.fixture && !values.removed) {
     // Exercise presentation-only cases without changing the engine fixture or classification.
