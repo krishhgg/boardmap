@@ -21,7 +21,7 @@ const server = await serve(report),
     executablePath: process.env.BOARDMAP_BROWSER || undefined,
   });
 const page = await browser.newPage({
-  viewport: { width: 1440, height: 900 },
+  viewport: { width: 1100, height: 800 },
   deviceScaleFactor: 1,
 });
 const out = "docs/media/instrument/demo-frames";
@@ -29,14 +29,38 @@ await mkdir(out, { recursive: true });
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.locator(".tile").first().waitFor();
+  // Record the actual pointer location in headless screenshots.
+  await page.evaluate(() => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 20 24");
+    svg.setAttribute("aria-hidden", "true");
+    Object.assign(svg.style, {
+      position: "fixed", width: "20px", height: "24px", zIndex: "9999",
+      pointerEvents: "none", display: "none",
+    });
+    const path = document.createElementNS(svg.namespaceURI, "path");
+    path.setAttribute("d", "M2 2 L2 19 L7 14 L11 22 L14 20 L10 13 L18 13 Z");
+    path.setAttribute("fill", "#fff");
+    path.setAttribute("stroke", "#0a0d10");
+    path.setAttribute("stroke-width", "1.5");
+    svg.append(path);
+    document.body.append(svg);
+    document.addEventListener("pointermove", (event) => {
+      svg.style.display = "block";
+      svg.style.left = `${event.clientX - 2}px`;
+      svg.style.top = `${event.clientY - 2}px`;
+    });
+  });
   const capture = async (name) => {
     return page.screenshot({
       path: `${out}/${name}.png`,
       animations: "disabled",
     });
   };
+  const sheet = page.getByRole("button", { name: "Open left", exact: true });
+  await sheet.hover();
   await capture("01-map");
-  await page.getByRole("button", { name: "Open left", exact: true }).click();
+  await sheet.click();
   await page.mouse.move(1, 1);
   await page.waitForFunction(() => !document.querySelector(".tile.hovered"));
   await capture("02-sheet");
@@ -55,6 +79,7 @@ try {
       .allTextContents(),
     ["Pin 2", "GND", "VBUS"],
   );
+  await page.locator(".semantic tr").filter({ hasText: /^Pin 2/ }).locator("td").last().hover();
   await capture("04-diff");
   if (process.argv.includes("--gif")) {
     const frames = ["01-map", "02-sheet", "03-reach", "04-diff"];
