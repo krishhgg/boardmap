@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>boardmap · electrical change review</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><a class="brand" href="/" aria-label="boardmap home"><span class="brand-mark">⌘</span> boardmap<span class="edition">LOCAL REVIEW</span></a><div id="revision" class="mono"></div><span class="offline">● Offline · read only</span></header>
+<section class="overview"><div><div class="eyebrow">THE ELECTRICAL CHANGE MAP</div><h1>What does this change touch?</h1><p id="project">Loading board data…</p></div><div id="stats" aria-label="Design statistics"></div></section>
+<div class="workspace">
+<aside><div class="aside-heading"><h2>Changes <span id="change-count"></span></h2><span class="mono">base → head</span></div><label class="search-label" for="search">Find a component or net</label><input id="search" type="search" placeholder="Reference, value, net…" autocomplete="off"><div class="filters"><label><input id="only-changed" type="checkbox" checked> Changed only</label><span id="list-count"></span></div><div id="part-list" aria-label="Components"></div><div class="aside-foot">Hover to trace shared nets.<br>Click a component to inspect its diff.</div></aside>
+<main><div class="toolbar"><nav id="breadcrumbs" aria-label="Sheet navigation"></nav><div class="view-tabs" aria-label="View"><button id="map-tab" class="active">Design map</button><button id="board-tab">Board layout</button></div></div>
+<div id="map-panel"><div class="map-settings"><label>Reach <select id="reach"><option value="direct">Direct neighbors</option><option value="transitive">Transitive connectivity</option></select></label><label><input id="ground" type="checkbox"> Include ground</label><span id="scope-count"></span></div><div id="canvas"><div id="tiles"></div><svg id="connections" aria-hidden="true"></svg><div id="map-empty" hidden>No components match this search.</div></div><div class="legend"><span><i class="modified"></i>Modified</span><span><i class="added"></i>Added</span><span><i class="removed"></i>Removed</span><span><i class="unchanged"></i>Unchanged</span><span class="legend-note">Area = numbered pads · groups = board / sheet</span></div></div>
+<section id="diff-panel" hidden aria-label="Component diff"></section>
+<div id="impact" aria-live="polite"><span class="impact-dot"></span><div><strong>Follow the electrical impact</strong><p>Hover or focus a part to see everything sharing its nets, across both revisions. Ground is excluded by default.</p></div></div>
+</main></div>
+<footer><span id="selection"></span><span>Pad connectivity · no routing, DRC or ERC analysis</span></footer>
+<script type="module" src="/app.js"></script>
+</body></html>
