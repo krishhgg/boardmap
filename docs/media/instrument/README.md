@@ -44,7 +44,7 @@ npm run test:e2e -- --repo "$CORNE_CACHE" \
 node scripts/capture-demo.mjs "$CORNE_CACHE" --gif
 ```
 
-All 24 existing engine tests and three presentation tests passed. Both synthetic browser cases and both real-board cases passed without browser errors. The browser asserts the actual JetBrains Mono platform font through Chromium CDP, full reference-label bounds, computed sidebar classifications, rewired-pin priority, full neighbor highlights, curve counts, changed-only pad colors, the drill disclosure, keyboard focus retention, search and scope filtering, and real touch preview before inspection.
+All 24 existing engine tests and four presentation tests passed. Both synthetic browser cases and both real-board cases passed without browser errors. The browser asserts the actual JetBrains Mono platform font through Chromium CDP, full reference-label bounds, computed sidebar classifications, rewired-pin priority, full neighbor highlights, curve counts, changed-only pad colors, the drill disclosure, keyboard focus retention, inspector reach-control updates, overflow at 720 / 800 / 390px, search and scope filtering, and real touch preview before inspection.
 
 The synthetic drill assertion opens the geometry disclosure, checks pad 2's 0.8 to 1.2 change, and confirms no unchanged pad 1 geometry row. The ZD1 demo separately verifies Pin 2 changes from GND to VBUS.
 
