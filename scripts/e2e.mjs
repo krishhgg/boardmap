@@ -45,6 +45,14 @@ try {
   await page.keyboard.press('Escape');await page.locator('#map-panel').waitFor({state:'visible'});
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   assert.ok(await page.evaluate(()=>document.activeElement.classList.contains('tile')),'closing diff restores map focus');
+  if(report.parts.some(p=>p.status==='unchanged')) {
+    for(const width of [1100,390,1440]) {
+      const unchanged=page.locator('.tile.unchanged').first(),id=await unchanged.getAttribute('data-id');
+      await unchanged.click();await page.setViewportSize({width,height:1000});await page.keyboard.press('Escape');
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.equal(await page.evaluate(()=>document.activeElement.dataset.id),id,'exact unchanged tile retains focus after resize and Escape');
+    }
+  }
   for(const status of ['modified','added','removed']) {
     const row=page.locator(`.part-row.${status}`).first();
     if(await row.count()) {

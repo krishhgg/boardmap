@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const el = (tag, text, className) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (className) n.className = className; return n; };
 const svgEl = (tag, attrs = {}) => { const n = document.createElementNS('http://www.w3.org/2000/svg',tag); for (const [k,v] of Object.entries(attrs)) n.setAttribute(k,v); return n; };
 const state = {scope:null, view:'map', selected:null, hover:null, query:'', transitive:false, includeGround:false};
-let report, parts, resize;
+let report, parts, resize, mapSize='';
 const weight = p => Math.max(3,Object.keys(p.pins).length);
 const shortFile = file => file.split('/').at(-1).replace('.kicad_pcb','');
 const mark = p => ({modified:'~',added:'+',removed:'−',unchanged:'·'})[p.status];
@@ -75,6 +75,7 @@ function renderMap() {
   $('scope-count').textContent=`${shown.length} components in view`;
   $('map-empty').hidden=shown.length>0;
   const {width:w,height:h}=$('canvas').getBoundingClientRect();
+  mapSize=`${w}:${h}`;
   if (!shown.length) return;
   if (state.view==='board') { renderBoard(shown,w,h); return; }
   const boardFiles = [...new Set(shown.map(p=>p.file))];
@@ -243,7 +244,6 @@ async function init() {
     $('ground').onchange=e=>{state.includeGround=e.target.checked;if(state.hover) highlight(state.hover);};
     for (const [id,view] of [['map-tab','map'],['board-tab','board']]) $(id).onclick=()=>{state.view=view;$(id).classList.add('active');$(id==='map-tab'?'board-tab':'map-tab').classList.remove('active');if(state.selected) closeDiff();renderMap();resetImpact();};
     document.addEventListener('keydown',e=>{if(e.key==='Escape' && state.selected) closeDiff();});
-    let mapSize='';
     resize=new ResizeObserver(()=>{
       const box=$('canvas').getBoundingClientRect(),size=`${box.width}:${box.height}`;
       if(!state.selected && box.width>0 && box.height>0 && size!==mapSize){mapSize=size;renderMap();resetImpact();}
