@@ -86,6 +86,13 @@ const assertReadoutFits = async (surface) => {
   });
   assert.deepEqual(clipped, [], "readout heading, leading nets, qualifiers and action fit in full");
 };
+const assertReturnedPart = async (surface, id) => {
+  assert.equal(await surface.locator(".tile.hovered").getAttribute("data-id"), id,
+    "Back visibly identifies the returned component for every input method");
+  const part = report.parts.find((p) => p.id === id);
+  assert.ok((await surface.locator("#impact strong").first().innerText()).startsWith(`${part.ref} ·`),
+    "the returned component is named in the reach readout");
+};
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.locator(".tile").first().waitFor();
@@ -535,7 +542,8 @@ try {
   const reachedId = await reached.getAttribute("data-id");
   await reached.press("Enter");
   assert.equal(await page.locator("#diff-panel").getAttribute("data-id"), reachedId);
-  await page.keyboard.press("Escape");
+  await page.locator(".close-diff").click();
+  await assertReturnedPart(page, reachedId);
   await tile.click();
   assert.ok((await page.locator(".semantic tr").count()) > 1);
   if (values.fixture) {
@@ -816,6 +824,7 @@ try {
     assert.equal(await choices.count(), 0, "following a neighbor chooses its board for return");
     assert.equal(await page.evaluate(() => document.activeElement.dataset.id), neighborId,
       "Back focuses the exact neighbor instead of the board-view tab");
+    await assertReturnedPart(page, neighborId);
     assert.ok(await page.locator(`.tile[data-id=${JSON.stringify(neighborId)}]`).isVisible());
     await capture("board-neighbor-return");
     await page.locator("#breadcrumbs button").first().click();
@@ -1108,6 +1117,7 @@ try {
       "two physical taps inspect the same small component");
     await touchPage.locator(".close-diff").tap();
     assert.equal(await touchPage.evaluate(() => document.activeElement.dataset.id), smallest.id);
+    await assertReturnedPart(touchPage, smallest.id);
     const restored = await small.boundingBox();
     assert.ok(restored.y >= 0 && restored.y + restored.height <= 844,
       "Back restores the selected target inside the long sheet map");

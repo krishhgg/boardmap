@@ -1078,6 +1078,8 @@ function closeDiff() {
     window.scrollTo({ top: origin?.scrollY ?? 0, behavior: "instant" });
     (target ?? $("canvas")).scrollIntoView({ block: "nearest" });
   }
+  if (target?.dataset.id && state.hover !== target.dataset.id)
+    highlight(target.dataset.id);
 }
 function padPosition(part, pad) {
   const angle = (part.angle * Math.PI) / 180;
