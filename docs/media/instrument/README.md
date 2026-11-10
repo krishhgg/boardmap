@@ -44,7 +44,7 @@ npm run test:e2e -- --repo "$CORNE_CACHE" \
 node scripts/capture-demo.mjs "$CORNE_CACHE" --gif
 ```
 
-All 24 existing engine tests and five presentation tests passed. Both synthetic browser cases and both real-board cases passed without browser errors. The browser asserts the actual JetBrains Mono platform font through Chromium CDP, full reference-label bounds, computed sidebar classifications, rewired-pin priority, full neighbor highlights, curve counts, changed-only pad colors, the drill disclosure, keyboard focus retention, inspector reach-control updates, changed mechanical-pad highlighting, long property names, open sheet-rename panels, overflow at 720 / 800 / 390px, search and scope filtering, and real touch preview before inspection.
+All 24 existing engine tests and six presentation tests passed. Both synthetic browser cases and both real-board cases passed without browser errors. The browser asserts the actual JetBrains Mono platform font through Chromium CDP, full reference-label bounds, computed sidebar classifications, rewired-pin priority, full neighbor highlights, curve counts, changed-only pad colors, the drill disclosure, keyboard focus retention, inspector reach-control updates, changed mechanical-pad highlighting, long property names, open sheet-rename panels, overflow at 720 / 800 / 390px, search and scope filtering, and real touch preview before inspection.
 
 The synthetic drill assertion opens the geometry disclosure, checks pad 2's 0.8 to 1.2 change, and confirms no unchanged pad 1 geometry row. The ZD1 demo separately verifies Pin 2 changes from GND to VBUS.
 
@@ -56,4 +56,4 @@ An offline install of the packed tarball passed checks for the HTML, app, helper
 
 These images contain design data from HackRF and Corne. See their source links and license information in the main README and test fixtures. Nonstandard pad shapes remain approximate; no copper or design-rule analysis is implied.
 
-`mechanical-pad-regression.png` is the synthetic regression inspector. The unnumbered mounting-hole drill changes from 1.0 to 1.4 mm and is colored in both revisions.
+`mechanical-pad-regression.png` is the synthetic regression inspector. The unnumbered mounting-hole drill changes from 1.0 to 1.4 mm and is colored in both revisions. A second unnumbered hole remains unchanged and neutral. The matching regression also covers reordered pads and footprint rotation.
