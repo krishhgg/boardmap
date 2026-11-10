@@ -20,7 +20,7 @@ function breadcrumb() {
     if (state.scope.sheet) { nav.append(el('span','/')); nav.append(el('span',state.scope.sheet)); }
   }
 }
-function setScope(scope) { state.scope=scope; state.selected=null; $('diff-panel').hidden=true; $('map-panel').hidden=false; breadcrumb(); renderMap(); resetImpact(); }
+function setScope(scope) { state.scope=scope; state.selected=null; $('diff-panel').hidden=true; $('map-panel').hidden=false; breadcrumb(); renderMap(); resetImpact(); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) $('tiles').animate([{opacity:.4,transform:'scale(.98)'},{opacity:1,transform:'scale(1)'}],{duration:180,easing:'ease-out'}); }
 function renderList() {
   const list=$('part-list'); list.replaceChildren();
   const shown = report.parts.filter(p=>matches(p) && (!$('only-changed').checked || p.status!=='unchanged'));
@@ -41,18 +41,20 @@ function wirePart(node,p) {
   node.onclick=()=>openDiff(p);
 }
 // Balanced binary treemap. Split by cumulative pad count along the longer axis.
-function pack(items,rect,visit) {
+function pack(items,rect,visit,minSize=0) {
   if (!items.length) return;
   if (items.length===1) { visit(items[0],rect); return; }
   const total=items.reduce((s,p)=>s+p.weight,0); let sum=0,cut=0;
   while (cut<items.length-1 && (sum===0 || sum+items[cut].weight<=total/2)) sum+=items[cut++].weight;
-  const ratio=sum/total;
+  const axis=rect.w>=rect.h?rect.w:rect.h;
+  const floor=Math.min(minSize,axis/2);
+  const ratio=Math.max(floor/axis,Math.min(1-floor/axis,sum/total));
   if (rect.w>=rect.h) {
-    pack(items.slice(0,cut),{...rect,w:rect.w*ratio},visit);
-    pack(items.slice(cut),{...rect,x:rect.x+rect.w*ratio,w:rect.w*(1-ratio)},visit);
+    pack(items.slice(0,cut),{...rect,w:rect.w*ratio},visit,minSize);
+    pack(items.slice(cut),{...rect,x:rect.x+rect.w*ratio,w:rect.w*(1-ratio)},visit,minSize);
   } else {
-    pack(items.slice(0,cut),{...rect,h:rect.h*ratio},visit);
-    pack(items.slice(cut),{...rect,y:rect.y+rect.h*ratio,h:rect.h*(1-ratio)},visit);
+    pack(items.slice(0,cut),{...rect,h:rect.h*ratio},visit,minSize);
+    pack(items.slice(cut),{...rect,y:rect.y+rect.h*ratio,h:rect.h*(1-ratio)},visit,minSize);
   }
 }
 function position(node,r,gap=2) { Object.assign(node.style,{left:`${r.x+gap}px`,top:`${r.y+gap}px`,width:`${Math.max(1,r.w-gap*2)}px`,height:`${Math.max(1,r.h-gap*2)}px`}); }
@@ -97,12 +99,17 @@ function renderMap() {
     const inner={x:2,y:30,w:Math.max(1,r.w-10),h:Math.max(1,r.h-38)};
     pack(group.ps.map(p=>({p,weight:weight(p)})).sort((a,b)=>b.weight-a.weight),inner,(item,box)=>tile(item.p,box,node));
     root.append(node);
-  });
+  },90);
 }
 function renderBoard(shown,w,h) {
   const files=[...new Set(shown.map(p=>p.file))];
   if (files.length>1) {
-    const message=el('button','Choose a board to view its physical layout.','empty'); message.onclick=()=>setScope({file:files[0]}); $('tiles').append(message);
+    const chooser=el('div',undefined,'board-chooser');
+    chooser.append(el('p','Choose a board to view its physical layout.'));
+    for (const file of files) {
+      const button=el('button',file); button.onclick=()=>setScope({file}); chooser.append(button);
+    }
+    $('tiles').append(chooser);
     return;
   }
   const xs=shown.map(p=>p.x),ys=shown.map(p=>p.y),minX=Math.min(...xs),minY=Math.min(...ys),maxX=Math.max(...xs),maxY=Math.max(...ys);

@@ -49,10 +49,24 @@ try {
   await page.locator('#search').fill('');
   await page.locator('#only-changed').uncheck();
   assert.equal(await page.locator('.part-row').count(),report.parts.length);
-  await page.locator('#board-tab').click();await capture('board');
+  await page.locator('#board-tab').click();
+  if(report.boards.length>1) {
+    const choices=page.locator('.board-chooser button');
+    assert.equal(await choices.count(),report.boards.length);
+    await choices.last().click();
+    assert.ok(await page.locator('.tile').count()>0);
+    assert.ok((await page.locator('#breadcrumbs').innerText()).includes(report.boards.at(-1).split('/').at(-1).replace('.kicad_pcb','')));
+  }
+  await capture('board');
   await page.locator('#map-tab').click();
   await page.setViewportSize({width:390,height:844});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no mobile horizontal overflow');
+  if(report.boards.length===1) {
+    await page.locator('#breadcrumbs button').first().click();
+    for(const group of await page.locator('.group-title').all()) {
+      const box=await group.boundingBox();assert.ok(box.width>=60 && box.height>=24,'small sheets retain visible drill targets');
+    }
+  }
   await capture('mobile');
   assert.deepEqual(errors,[]);
   console.log(`PASS: ${report.parts.length} parts, ${report.stats.changed} changes; map, reach, transitive, ground, diff, drill-in, breadcrumbs, search, layout, mobile; no browser errors.`);
