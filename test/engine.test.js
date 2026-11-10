@@ -178,3 +178,10 @@ test('unmatched and removed sheet labels still guard narrower prefixes',()=> {
   const report=compare(a,b.slice(0,1));
   assert.ok(report.nets['main.kicad_pcb::/Power/Monitor/SENSE']);
 });
+test('a removed sheetmate reuses the rename proved by its surviving sheet UUID',()=> {
+  const a=read(board(fp('R1','/Power/VIN'),fp('R2','/Power/VIN'))),b=structuredClone(a.slice(0,1));
+  for(const [i,p] of a.entries()){p.sheet='Power';p.path=`/sheet/part${i}`;}
+  b[0].sheet='Supply';b[0].path=a[0].path;b[0].pins['1']=['/Supply/VIN'];
+  const report=compare(a,b);assert.equal(report.stats.changed,1);assert.equal(report.stats.affected,1);
+  assert.equal(report.parts.find(p=>p.ref==='R1').status,'unchanged');assert.equal(report.parts.find(p=>p.ref==='R2').status,'removed');
+});

@@ -16,7 +16,9 @@ export function sheetRenames(before,after) {
     const b=after.get(id);
     const key=`${a.file}::${prefix(a.sheet)}`;
     if(!candidates.has(key)) candidates.set(key,new Set());
-    candidates.get(key).add(prefix(b && sameSheet(a,b)?b.sheet:a.sheet));
+    const proven=a.path?renamed.get(`${a.file}::${sheetPath(a)}`):undefined;
+    const target=b && sameSheet(a,b)?b.sheet:!b && proven?.before===a.sheet?proven.after:a.sheet;
+    candidates.get(key).add(prefix(target));
   }
   const rules=[];
   for(const [key,targets] of candidates) {
