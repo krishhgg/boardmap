@@ -8,6 +8,7 @@ const assets = new Map([
     ["../assets/fonts/JetBrainsMono-Regular.woff2", "font/woff2"],
   ],
   ["/review.js", ["../web/review.js", "text/javascript; charset=utf-8"]],
+  ["/layout.js", ["../web/layout.js", "text/javascript; charset=utf-8"]],
   ["/app.js", ["../web/app.js", "text/javascript; charset=utf-8"]],
   ["/style.css", ["../web/style.css", "text/css; charset=utf-8"]],
   ["/compare.js", ["./compare.js", "text/javascript; charset=utf-8"]],

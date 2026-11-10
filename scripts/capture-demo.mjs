@@ -37,8 +37,8 @@ try {
   };
   await capture("01-map");
   await page.getByRole("button", { name: "Open left", exact: true }).click();
-  await page.locator("#map-tab").focus();
-  await page.locator("#impact").hover();
+  await page.mouse.move(1, 1);
+  await page.waitForFunction(() => !document.querySelector(".tile.hovered"));
   await capture("02-sheet");
   const target = page
     .locator(".tile")

@@ -445,9 +445,13 @@ select {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
-  height: 80px;
-  overflow-y: auto;
+  min-height: 128px;
+  height: auto;
   flex-shrink: 0;
+  overscroll-behavior: contain;
+}
+main:has(#diff-panel:not([hidden])) > #impact {
+  display: none;
 }
 .impact-dot {
   width: 4px;
@@ -460,6 +464,15 @@ select {
 #impact > div {
   min-width: 0;
   flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 26%);
+  column-gap: 16px;
+  align-content: start;
+}
+#impact > div > strong,
+#impact > div > p,
+#impact > div > .net-reach-list {
+  grid-column: 1;
 }
 #impact strong {
   font-family: var(--mono);
@@ -477,6 +490,58 @@ select {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+.net-reach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font: 11px var(--mono);
+}
+.net-reach-list li {
+  display: inline-flex;
+  gap: 6px;
+  max-width: 100%;
+  color: var(--muted);
+}
+.net-reach-list li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#impact > div > .net-reach-list li span {
+  max-width: 180px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.net-reach-more {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  min-width: 0;
+  color: var(--faint);
+  border-left: 1px solid var(--line);
+  padding-left: 12px;
+  font-size: 11px;
+}
+.net-reach-more .net-reach-list {
+  height: 76px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.net-reach-more .net-reach-list li {
+  flex-shrink: 0;
+}
+#impact .net-reach-list strong {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--blue);
+  white-space: nowrap;
+}
 .open-preview {
   border: 1px solid var(--line);
   background: var(--raised);
@@ -485,6 +550,26 @@ select {
   font-size: 12px;
   white-space: nowrap;
   align-self: center;
+}
+@media (min-width: 701px) and (max-width: 900px) {
+  #impact {
+    min-height: 176px;
+  }
+  #impact > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .net-reach-more {
+    grid-column: 1;
+    grid-row: 4;
+    margin-top: 8px;
+    padding-left: 0;
+    border-left: 0;
+  }
+  .net-reach-more .net-reach-list {
+    height: 32px;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 #map-panel {
   display: flex;
@@ -617,6 +702,7 @@ select {
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
+  line-height: 1.4;
 }
 .tile .value {
   display: block;
@@ -768,6 +854,85 @@ footer {
   font-family: var(--mono);
   overflow-wrap: anywhere;
 }
+.priority-tag {
+  display: inline-block;
+  padding: 3px 6px;
+  margin-left: 10px;
+  font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.priority-tag.electrical {
+  color: var(--orange);
+}
+.classification-note,
+.reach-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.classification-note a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reach-details {
+  margin: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.reach-details > summary {
+  padding: 9px 0;
+  cursor: pointer;
+  color: var(--blue);
+  font-size: 12px;
+}
+.reach-net h3 {
+  margin: 14px 0 6px;
+  font: 12px var(--mono);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.reach-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.reach-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 8px;
+  min-height: 32px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 12px;
+}
+.reach-part strong {
+  font: 12px var(--mono);
+}
+.reach-part span {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: 11px;
+}
+.reach-part.removed strong {
+  text-decoration: line-through;
+  color: var(--red);
+}
+.reach-part.added strong {
+  color: var(--green);
+}
+.reach-part:focus-visible,
+.close-diff:focus-visible {
+  outline-offset: -2px;
+}
 .regions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -791,6 +956,11 @@ footer {
   width: 100%;
   height: 180px;
   font-family: var(--mono);
+}
+@media (max-height: 820px) {
+  .region svg {
+    height: 120px;
+  }
 }
 .region-note {
   margin: 8px 0 0;
@@ -1022,12 +1192,34 @@ footer {
     font-size: 11px;
   }
   #impact {
-    height: 112px;
-    min-height: 112px;
+    height: 176px;
+    min-height: 176px;
     padding: 8px;
     margin-bottom: 8px;
     gap: 8px;
     flex-wrap: wrap;
+  }
+  #impact.sheet-scope {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  #impact > div {
+    display: block;
+    flex-basis: calc(100% - 12px);
+  }
+  #impact .net-reach-more {
+    display: none;
+  }
+  #impact .net-reach-list {
+    gap: 4px 12px;
+    margin-top: 5px;
+  }
+  #impact > div > .net-reach-list li span {
+    max-width: 112px;
+  }
+  #impact p {
+    max-height: none;
   }
   #impact strong {
     font-family: var(--mono);

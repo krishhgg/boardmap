@@ -11,6 +11,7 @@ import {
   isElectrical,
   changedMechanicalPads,
   propertyPriority,
+  propertyReasons,
 } from "../web/review.js";
 const part = (changes = [], extra = {}) => ({
   status: "modified",
@@ -25,6 +26,12 @@ const assemblyBoard = (revision) => readBoard(
   readFileSync(new URL(`./fixtures/hackrf/assembly-${revision}.kicad_pcb`, import.meta.url), "utf8"),
   "assembly.kicad_pcb",
 );
+test("population and part-identifier reasons are both preserved", () => {
+  const change = { field: "fields", before: { DNP: "", MPN: "OLD" },
+    after: { DNP: "DNP", MPN: "NEW" } };
+  assert.deepEqual(propertyReasons(change), ["population", "part identifier"]);
+  assert.equal(propertyPriority(change), "population");
+});
 test("real legacy board features migrate metadata without hiding a population change", () => {
   const before = assemblyBoard("before"), after = assemblyBoard("after");
   for (const [a, b] of [[before, after], [after, before]]) {

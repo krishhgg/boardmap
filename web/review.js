@@ -12,7 +12,7 @@ const legacyFeatures = new Set([
   "hackrf:GSG-TESTPOINT-50MIL",
   "gsg-modules:0603-JUMPER",
 ]);
-function legacyAssemblyMigration(part) {
+export function legacyAssemblyMigration(part) {
   const a = part?.before,
     b = part?.after;
   if (!a || !b || a.footprint !== b.footprint || !legacyFeatures.has(a.footprint))
@@ -29,12 +29,13 @@ function legacyAssemblyMigration(part) {
     fresh.fields.exclude_from_bom === "";
   return direction(a, b) || direction(b, a);
 }
-export function propertyPriority(change, part) {
+export function propertyReasons(change, part) {
   if (change.field === "attributes")
     return change.before.includes("dnp") !== change.after.includes("dnp")
-      ? "population"
-      : null;
-  if (change.field !== "fields") return null;
+      ? ["population"]
+      : [];
+  if (change.field !== "fields") return [];
+  const reasons = [];
   const keys = new Set([
     ...Object.keys(change.before),
     ...Object.keys(change.after),
@@ -44,8 +45,10 @@ export function propertyPriority(change, part) {
       ["dnp", "donotpopulate", "donotplace"].includes(normalizedKey(key)) &&
       dnp(change.before[key]) !== dnp(change.after[key]) &&
       !(key === "DNP" && legacyAssemblyMigration(part))
-    )
-      return "population";
+    ) {
+      reasons.push("population");
+      break;
+    }
   for (const key of keys) {
     if (
       ![
@@ -58,10 +61,15 @@ export function propertyPriority(change, part) {
       continue;
     const before = String(change.before[key] ?? "").trim(),
       after = String(change.after[key] ?? "").trim();
-    if (before && after && before !== after) return "part identifier";
+    if (before && after && before !== after) {
+      reasons.push("part identifier");
+      break;
+    }
   }
-  return null;
+  return reasons;
 }
+export const propertyPriority = (change, part) =>
+  propertyReasons(change, part)[0] ?? null;
 export const orderedChanges = (part) =>
   [...part.changes].sort((a, b) => {
     const rank = (change) =>
@@ -168,3 +176,37 @@ export function changedMechanicalPads(part, key) {
     }),
   );
 }
+
+// Count every reachable peer on each net, not only the first edge that found it.
+export function netReachGroups(report, part, result, transitive = false) {
+  const reached = new Set([part.id, ...result.ids]);
+  const included = new Set(result.nets);
+  return Object.values(report.nets)
+    .filter((net) => net.file === part.file && included.has(net.name))
+    .map((net) => {
+      const peers = new Set();
+      for (const members of [net.before, net.after]) {
+        const connected = transitive
+          ? members.some((id) => reached.has(id))
+          : members.includes(part.id);
+        if (!connected) continue;
+        for (const id of members)
+          if (id !== part.id && reached.has(id)) peers.add(id);
+      }
+      return {
+        name: net.name,
+        ids: [...peers].sort((a, b) =>
+          a.localeCompare(b, undefined, { numeric: true }),
+        ),
+      };
+    })
+    .sort((a, b) =>
+      b.ids.length - a.ids.length ||
+      a.name.localeCompare(b.name, undefined, { numeric: true }),
+    );
+}
+export const rankedNetReach = (report, part, result, transitive = false) =>
+  netReachGroups(report, part, result, transitive).map(({ name, ids }) => ({
+    name,
+    count: ids.length,
+  }));
