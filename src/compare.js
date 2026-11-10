@@ -1,4 +1,9 @@
-import { sameSheet, sheetRenames, netLabelRenames, padGeometry } from "./normalize.js";
+import {
+  sameSheet,
+  sheetRenames,
+  netLabelRenames,
+  padGeometry,
+} from "./normalize.js";
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const stable = (object) =>
   Object.fromEntries(
@@ -125,7 +130,10 @@ export function compare(before, after, metadata = {}) {
           : "modified";
   }
   const report = {
-    schema: 1, ...metadata, parts, nets,
+    schema: 1,
+    ...metadata,
+    parts,
+    nets,
     sheetRenames: sheets.renames,
     netRenames: labels.renames,
   };

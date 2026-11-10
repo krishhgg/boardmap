@@ -145,6 +145,16 @@ try {
     "no actual Courier fallback",
   );
   assert.equal(await page.locator(".list-heading.part-row").count(), 0);
+  const renamedLabels = [
+    ...(report.sheetRenames ?? []).map((r) => `Sheet: ${r.before} → ${r.after}`),
+    ...(report.netRenames ?? []).map((r) => `Net: ${r.before} → ${r.after}`),
+  ];
+  if (renamedLabels.length) {
+    await page.locator(".sheet-renames summary").click();
+    assert.deepEqual(await page.locator(".sheet-renames li").allTextContents(), renamedLabels,
+      "the disclosure names every proved sheet and net label rename");
+    await page.locator(".sheet-renames summary").click();
+  }
   await page.locator(".tile .ref").evaluateAll((labels) => {
     for (const label of labels) {
       const tile = label.closest(".tile"),
@@ -974,12 +984,12 @@ try {
   }
   for (const width of [720, 800, 390]) {
     await page.setViewportSize({ width, height: 844 });
-    if (report.sheetRenames?.length) {
+    if (report.sheetRenames?.length || report.netRenames?.length) {
       await page.locator(".sheet-renames summary").click();
       const bounds = await page.locator(".sheet-renames ul").boundingBox();
       assert.ok(
         bounds.x >= 0 && bounds.x + bounds.width <= width,
-        "sheet rename popover stays inside the viewport",
+        "label rename popover stays inside the viewport",
       );
       await page.locator(".sheet-renames summary").click();
     }
@@ -1180,7 +1190,8 @@ try {
     "Back brings the map into view",
   );
   await tapSamePoint();
-  await touchPage.locator("#project").tap();
+  // Keep this outside tap away from the browser's expanded disclosure target.
+  await touchPage.locator("#stats .parts").tap();
   assert.equal(
     await touchPage.locator(".open-preview").count(),
     0,
