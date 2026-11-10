@@ -766,6 +766,11 @@ try {
     !(await touchPage.locator("#impact").isVisible()),
     "phone inspection gives the screen to the component rather than map controls",
   );
+  assert.equal(
+    await touchPage.evaluate(() => scrollY),
+    0,
+    "phone inspection starts at the top without cropping the app header",
+  );
   const firstPin = await touchPage.locator(".semantic tr").nth(1).boundingBox();
   assert.ok(
     firstPin.y >= 0 && firstPin.y + firstPin.height <= 844,

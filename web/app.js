@@ -915,7 +915,7 @@ function openDiff(p, origin) {
   inspectorImpact(p);
   close.focus({ preventScroll: true });
   if (matchMedia("(max-width: 700px)").matches)
-    head.scrollIntoView({ block: "start" });
+    window.scrollTo({ top: 0, behavior: "instant" });
 }
 function inspectorImpact(p) {
   const count = reach(report, p.id, state).ids.length;
