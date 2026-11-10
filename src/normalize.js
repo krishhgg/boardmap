@@ -18,18 +18,35 @@ export function sheetRenames(before,after) {
     if(!candidates.has(key)) candidates.set(key,new Set());
     candidates.get(key).add(prefix(b.sheet));
   }
-  const mappings=[];
+  const rules=[];
   for(const [key,targets] of candidates) {
     const cut=key.lastIndexOf('::'),file=key.slice(0,cut),from=key.slice(cut+2);
-    if(targets.size===1 && from!=='//') {
-      const to=[...targets][0];if(to!==from && to!=='//')mappings.push({file,from,to});
-    }
+    const to=targets.size===1?[...targets][0]:from;
+    rules.push({file,from,to:from==='//' || to==='//'?from:to});
   }
-  mappings.sort((a,b)=>b.from.length-a.from.length);
-  return {renames:[...renamed.values()],netName:(file,name)=> {
-    const match=mappings.find(m=>m.file===file && name.startsWith(m.from));
-    return match?match.to+name.slice(match.from.length):name;
-  }};
+  // Identity and ambiguous rules guard their prefixes from broader renames.
+  rules.sort((a,b)=>b.from.length-a.from.length);
+  const blocked=new Set();
+  const rewrite=(file,name)=> {
+    const rule=rules.find(r=>r.file===file && name.startsWith(r.from));
+    return rule && !blocked.has(rule)?{name:rule.to+name.slice(rule.from.length),rule}:{name,rule:null};
+  };
+  // A rename must not collapse two distinct historical nets. Blocking a rule can
+  // expose another collision in a rename chain, so repeat until no rule changes.
+  let changed;
+  do {
+    changed=false;
+    const destinations=new Map();
+    for(const part of before.values()) for(const raw of new Set(Object.values(part.pins).flat().filter(Boolean))) {
+      const result=rewrite(part.file,raw),key=`${part.file}::${result.name}`,prior=destinations.get(key);
+      if(prior && prior.raw!==raw) {
+        for(const rule of [prior.rule,result.rule]) {
+          if(rule && rule.from!==rule.to && !blocked.has(rule)){blocked.add(rule);changed=true;}
+        }
+      } else destinations.set(key,{raw,rule:result.rule});
+    }
+  } while(changed);
+  return {renames:[...renamed.values()],netName:(file,name)=>rewrite(file,name).name};
 }
 export function padGeometry(part) {
   return part.pads.map(({net,...pad})=>({...pad,angle:Number((((pad.angle-part.angle)%360+360)%360).toFixed(6))}))

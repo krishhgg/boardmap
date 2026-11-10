@@ -155,3 +155,18 @@ test('Corne left and right ground rails are excluded symmetrically',()=> {
   assert.equal(reach(report,'main.kicad_pcb::C1').ids.length,2);assert.equal(reach(report,'main.kicad_pcb::rC1').ids.length,2);
   assert.ok(reach(report,'main.kicad_pcb::rC1',{includeGround:true}).ids.length>70);
 });
+test('unchanged child sheet prefixes guard against a broader rename',()=> {
+  const a=read(board(fp('R1','/Power/VIN'),fp('R2','/Power/Monitor/SENSE'))),b=structuredClone(a);
+  for(const [i,sheet] of ['Power','Power/Monitor'].entries()) {a[i].sheet=sheet;b[i].sheet=sheet;a[i].path=`/sheet${i}/part${i}`;b[i].path=a[i].path;}
+  b[0].sheet='Supply';b[0].pins['1']=['/Supply/VIN'];
+  assert.equal(compare(a,b).stats.changed,0);
+  b[1].pins['1']=['/Supply/Monitor/SENSE'];assert.equal(compare(a,b).stats.changed,1);
+});
+test('sheet prefix renames never merge distinct historical nets',()=> {
+  const a=read(board(fp('R1','/A/X'),fp('R2','/B/X'))),b=structuredClone(a.slice(0,1));
+  a[0].sheet='A';a[0].path='/sheetA/part1';a[1].sheet='B';a[1].path='/sheetB/part2';b[0].sheet='B';b[0].path=a[0].path;b[0].pins['1']=['/B/X'];
+  const report=compare(a,b);
+  assert.deepEqual(report.nets['main.kicad_pcb::/A/X'].before,['main.kicad_pcb::R1']);
+  assert.deepEqual(report.nets['main.kicad_pcb::/B/X'].before,['main.kicad_pcb::R2']);
+  assert.ok(report.parts[0].changes.some(c=>c.field==='pins'));
+});
