@@ -925,7 +925,6 @@ function inspectorImpact(p) {
   );
 }
 function closeDiff() {
-  const id = state.selected;
   state.selected = null;
   renderList();
   $("diff-panel").hidden = true;
