@@ -9,9 +9,9 @@ Six PNGs captured from the running UI in Chromium. The reports use the pinned re
 | `hackrf/keyboard-focus.png` | 1440 × 900 | Keyboard focus on U23, direct neighbors and the changed-field readout.                                                                                 |
 | `hackrf/u17-inspector.png`  | 1440 × 900 | MAX2839 to MAX2837 value and footprint context above the 51 changed pin rows.                                                                          |
 | `corne/touch-reach.png`     | 390 × 844  | Real touch previews rU1 reach. Metadata artwork has neutral fill and status outlines.                                                                  |
-| `corne/touch-diff.png`      | 390 × 844  | Touch opens rU1 inspection with its header in view and document scrolling.                                                                             |
+| `corne/touch-diff.png`      | 390 × 844  | Touch opens rU1 inspection with map controls hidden, the pin change in view and document scrolling.                                                                             |
 
-The parent reviewer must inspect these PNGs before filing the PR. Existing instrument captures and the hero are unchanged.
+Existing instrument captures and the hero are unchanged.
 
 ## Reproduce
 
@@ -40,7 +40,7 @@ npm run test:e2e -- --repo "$CORNE_CACHE" \
 
 All 30 existing unit tests and all five browser commands pass. Browser assertions cover one Tab stop per component region, arrows and Home/End, native Enter/Space inspection, search through the list to Reach, exact focus restoration after Escape and resizing, gutter hover retention, focus/blur behavior, touch dismissal, and changed-field readouts. Header checks cover 1024 and 720 pixels. Text checks cover actual JetBrains Mono rendering, complete reference bounds, long property keys, rename popover bounds, and faint text contrast of at least 4.5:1 against its backgrounds.
 
-Existing assertions still cover all direct neighbor highlights, dense curve counts, ground and transitive controls, unchanged pads, changed numbered pads, and two unnumbered mounting holes with only the edited hole highlighted in both revisions. The phone regression stores one physical coordinate and sends both taps there. It also opens inspection from the expanded list, checks that the list collapses, checks document scrolling, and verifies Back focuses the same component's map tile with the map in view.
+Existing assertions still cover all direct neighbor highlights, dense curve counts, ground and transitive controls, unchanged pads, changed numbered pads, and two unnumbered mounting holes with only the edited hole highlighted in both revisions. The phone regression stores one physical coordinate and sends both taps there. It also opens inspection from the expanded list, checks that the list collapses, checks document scrolling and the first semantic change on the initial phone screen, and verifies Back focuses the same component's map tile with the map in view.
 
 A separate browser page in the synthetic fixture run checks joined assembly flags, absent versus empty string values, the ZD1 Pin 2 GND to VBUS row before other semantic rows, replacement context, and removed sheetmate display grouping. The rename check uses file, parent sheet UUID path and old label, and leaves a same-label part with a different UUID in its original group. The raw removed label remains in the inspector.
 
