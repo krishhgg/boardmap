@@ -375,6 +375,25 @@ try {
     candidate.id,
     "leaving pointer preview restores the keyboard-focused component",
   );
+  const firstRow = page.locator(".part-row").first();
+  if (await firstRow.count()) {
+    await firstRow.focus();
+    await otherTile.hover();
+    await page.mouse.move(1, 1);
+    assert.equal(
+      await page.locator(".tile.hovered").getAttribute("data-id"),
+      await firstRow.getAttribute("data-id"),
+      "leaving the map restores a keyboard-focused sidebar component",
+    );
+    await tile.focus();
+    await firstRow.hover();
+    await page.mouse.move(1, 1);
+    assert.equal(
+      await page.locator(".tile.hovered").getAttribute("data-id"),
+      candidate.id,
+      "leaving the sidebar restores a keyboard-focused map component",
+    );
+  }
   await page.locator("#search").focus();
   assert.equal(
     await page.locator(".tile.hovered").count(),

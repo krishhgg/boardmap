@@ -94,7 +94,7 @@ function wireRoving(root, region) {
     root.addEventListener("pointerleave", (event) => {
       if (event.pointerType !== "touch" && !state.touchPreview) {
         const focused = document.activeElement;
-        if (root.contains(focused) && focused.dataset.id)
+        if (focused.matches(".tile, .part-row") && focused.dataset.id)
           highlight(focused.dataset.id);
         else resetImpact();
       }
@@ -1202,7 +1202,7 @@ async function init() {
     $("canvas").addEventListener("pointerleave", (event) => {
       if (event.pointerType !== "touch" && !state.touchPreview) {
         const focused = document.activeElement;
-        if ($("tiles").contains(focused) && focused.dataset.id)
+        if (focused.matches(".tile, .part-row") && focused.dataset.id)
           highlight(focused.dataset.id);
         else resetImpact();
       }
