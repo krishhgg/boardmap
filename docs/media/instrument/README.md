@@ -1,6 +1,6 @@
 # Instrument UI captures
 
-Actual Chromium captures of the pinned real-board comparisons. Each run starts an ephemeral loopback server and closes it afterward. No fixture data replaces the boards in these images.
+These gallery captures record the earlier instrument revision. The hero GIF and `demo-frames/` are refreshed with the current UI; the latest drilled-sheet and visible-return captures are in [continuity](../continuity/README.md). Each run starts an ephemeral loopback server and closes it afterward. No fixture data replaces the boards in these images.
 
 | Capture                                           | Viewport | State                                                                    |
 | ------------------------------------------------- | -------- | ------------------------------------------------------------------------ |
@@ -52,7 +52,7 @@ The synthetic drill assertion opens the geometry disclosure, checks pad 2's 0.8 
 
 ## Demo and package
 
-`demo-frames/` contains four actual 1440×900 ZD1 review states. `boardmap-demo.gif` holds them for 1.2, 1.2, 2.8 and 2.8 seconds. FFprobe reports 8.000 seconds, 80 frames and 1100×688 pixels. FFmpeg is needed only to rebuild the GIF.
+`demo-frames/` contains four actual 1100×800 ZD1 review states. The recording cursor follows real pointer events; it is not part of the application. `boardmap-demo.gif` holds the states for 1.2, 1.2, 2.8 and 2.8 seconds. FFprobe reports 8.000 seconds, 80 frames and 1100×800 pixels. FFmpeg is needed only to rebuild the GIF.
 
 An offline install of the packed tarball passed checks for the HTML, app, helper, CSS, shared mark and mono font routes. Arbitrary asset paths returned 404. The package has zero runtime dependencies and excludes this media directory. The bundled font's OFL notice is installed with it.
 

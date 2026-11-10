@@ -1,4 +1,4 @@
-import { pack, touchSheetHeight } from "/layout.js";
+import { pack, sheetHeight } from "/layout.js";
 import { reach } from "/compare.js";
 import {
   orderedChanges,
@@ -51,7 +51,8 @@ let report,
   resize,
   mapSize = "",
   previewReset,
-  hoverRetarget;
+  hoverRetarget,
+  lastHoverPoint;
 const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
 const shortFile = (file) => file.split("/").at(-1).replace(".kicad_pcb", "");
@@ -113,7 +114,8 @@ function cancelPreviewReset() {
   clearTimeout(previewReset);
 }
 function cancelHoverRetarget() {
-  clearTimeout(hoverRetarget);
+  clearTimeout(hoverRetarget?.timer);
+  hoverRetarget = null;
 }
 function schedulePreviewReset(event) {
   if (event.pointerType === "touch" || state.touchPreview) return;
@@ -129,10 +131,14 @@ function schedulePreviewReset(event) {
   }, 120);
 }
 function partOrigin(node) {
+  const map = $("canvas").getBoundingClientRect();
   return {
     region: $("part-list").contains(node) ? "list" : "map",
     key: node.dataset.focusKey,
     scrollY,
+    mapScrollTop: $("map-panel").scrollTop,
+    mapWidth: map.width,
+    mapHeight: map.height,
   };
 }
 function matches(p) {
@@ -198,7 +204,7 @@ function breadcrumb() {
     nav.append(board);
     if (state.scope.sheet) {
       nav.append(el("span", "/"));
-      const sheet = el("span", state.scope.sheet);
+      const sheet = el("span", state.scope.sheet === "/" ? "Root sheet" : state.scope.sheet);
       sheet.title = state.scope.sheet;
       nav.append(sheet);
     }
@@ -331,18 +337,37 @@ ${orderedChanges(p)
 }
 function wirePart(node, p) {
   let touchClick = false;
+  const waitForRest = (event) => {
+    cancelHoverRetarget();
+    hoverRetarget = {
+      id: p.id,
+      x: event.clientX,
+      y: event.clientY,
+      timer: setTimeout(() => highlight(p.id), 160),
+    };
+  };
   node.onpointerdown = (event) => {
     touchClick = event.pointerType === "touch";
   };
   node.onpointercancel = () => {
     touchClick = false;
   };
-  node.onpointerenter = (event) => {
-    if (event.pointerType === "touch") return;
-    cancelHoverRetarget();
-    if (node.classList.contains("tile") && state.hover && state.hover !== p.id)
-      hoverRetarget = setTimeout(() => highlight(p.id), 160);
-    else highlight(p.id);
+  // Redrawing under a stationary cursor is not a request for another trace.
+  node.onpointermove = (event) => {
+    if (
+      event.pointerType === "touch" ||
+      (lastHoverPoint &&
+        event.clientX === lastHoverPoint.x &&
+        event.clientY === lastHoverPoint.y) ||
+      state.hover === p.id
+    )
+      return;
+    if (!node.classList.contains("tile") || !state.hover) highlight(p.id);
+    else if (
+      hoverRetarget?.id !== p.id ||
+      Math.hypot(event.clientX - hoverRetarget.x, event.clientY - hoverRetarget.y) > 4
+    )
+      waitForRest(event);
   };
   node.onpointerleave = cancelHoverRetarget;
   node.onfocus = () => {
@@ -372,6 +397,27 @@ function position(node, r, gap = 2) {
     height: `${Math.max(1, r.h - gap * 2)}px`,
   });
 }
+function referenceLayout(ref, r) {
+  const compact = r.w < 65 || r.h < 40;
+  const horizontalPadding = compact ? 2 : 5;
+  const verticalPadding = compact ? 2 : 5;
+  const available = r.w - 6 - horizontalPadding * 2;
+  const availableHeight = r.h - 6 - verticalPadding * 2;
+  const measure = textMetrics;
+  const family = getComputedStyle(document.documentElement).getPropertyValue(
+    "--mono",
+  );
+  let fontSize = 12;
+  for (; fontSize >= 9; fontSize--) {
+    measure.font = `500 ${fontSize}px ${family}`;
+    if (
+      measure.measureText(ref).width <= available &&
+      fontSize * 1.4 <= availableHeight
+    )
+      break;
+  }
+  return { fontSize, horizontalPadding, verticalPadding };
+}
 function tile(p, r, parent) {
   const kind = changeGroup(p);
   const node = el(
@@ -385,26 +431,8 @@ function tile(p, r, parent) {
   const rewired = changedPins(p).length;
   node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}`);
   node.title = `${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
-  // Measure the whole reference in the loaded utility face. Never render a clipped ID.
-  const compact = r.w < 65 || r.h < 40;
-  const horizontalPadding = compact ? 2 : 5;
-  const verticalPadding = compact ? 2 : 5;
+  const { fontSize, horizontalPadding, verticalPadding } = referenceLayout(p.ref, r);
   node.style.padding = `${verticalPadding}px ${horizontalPadding}px`;
-  const available = r.w - 6 - horizontalPadding * 2;
-  const availableHeight = r.h - 6 - verticalPadding * 2;
-  const measure = textMetrics;
-  const family = getComputedStyle(document.documentElement).getPropertyValue(
-    "--mono",
-  );
-  let fontSize = 12;
-  for (; fontSize >= 9; fontSize--) {
-    measure.font = `500 ${fontSize}px ${family}`;
-    if (
-      measure.measureText(p.ref).width <= available &&
-      fontSize * 1.4 <= availableHeight
-    )
-      break;
-  }
   if (fontSize >= 9) {
     const label = el("span", p.ref, "ref");
     label.style.fontSize = `${fontSize}px`;
@@ -423,11 +451,11 @@ function tile(p, r, parent) {
   wirePart(node, p);
   parent.append(node);
 }
-function renderMap() {
-  buildMap();
+function renderMap(restore) {
+  buildMap(restore);
   syncRoving($("tiles"), "map");
 }
-function buildMap() {
+function buildMap(restore) {
   $("map-scale-note").textContent =
     state.view === "board"
       ? "Footprint centers · markers not to scale"
@@ -445,10 +473,19 @@ function buildMap() {
   $("map-empty").hidden = shown.length > 0;
   const sheetItems = shown.map((p) => ({ p, weight: weight(p) }))
     .sort((a, b) => b.weight - a.weight);
-  $("canvas").style.minHeight =
-    state.view === "map" && state.scope?.sheet && matchMedia("(max-width: 700px)").matches
-      ? `${touchSheetHeight(sheetItems, $("canvas").getBoundingClientRect().width)}px`
-      : "";
+  $("canvas").style.minHeight = "";
+  if (state.view === "map" && state.scope?.sheet) {
+    const box = $("canvas").getBoundingClientRect();
+    const phone = matchMedia("(max-width: 700px)").matches;
+    const height = sheetHeight(sheetItems, box.width, {
+      minHeight: restore?.mapWidth === box.width
+        ? Math.max(box.height, restore.mapHeight)
+        : box.height,
+      minSide: phone ? 32 : 0,
+      fits: (item, rect) => referenceLayout(item.p.ref, rect).fontSize >= 9,
+    });
+    $("canvas").style.minHeight = `${height}px`;
+  }
   const { width: w, height: h } = $("canvas").getBoundingClientRect();
   mapSize = `${w}:${h}`;
   if (!shown.length) return;
@@ -657,9 +694,11 @@ function highlight(id) {
     ? `Changed: ${changeFields(p).join(", ")}. `
     : `${p.status[0].toUpperCase() + p.status.slice(1)}. `;
   const phone = matchMedia("(max-width: 700px)").matches;
+  const netUnit = result.nets.length === 1 ? "net" : "nets";
+  const curveUnit = edges.length === 1 ? "curve" : "curves";
   const facts = phone
-    ? `${result.nets.length} base/head nets · ${visible} in view · ${result.ids.length - visible} outside · ${edges.length} ${dense ? "electrical-link " : ""}curves. `
-    : `${change}${result.nets.length} nets across base/head · ${visible} highlighted in view · ${result.ids.length - visible} outside this view · ${edges.length} curves shown${dense ? " (electrical links only)" : ""}. `;
+    ? `${result.nets.length} base/head ${netUnit} · ${visible} in view · ${result.ids.length - visible} outside · ${edges.length} ${dense ? "electrical-link " : ""}${curveUnit}. `
+    : `${change}${result.nets.length} ${netUnit} across base/head · ${visible} highlighted in view · ${result.ids.length - visible} outside this view · ${edges.length} ${curveUnit} shown${dense ? " (electrical links only)" : ""}. `;
   const body = impact(
     title,
     `${facts}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation." : ""}`,
@@ -1060,24 +1099,37 @@ function inspectorImpact(p) {
   syncRoving(content, "connections");
 }
 function closeDiff() {
+  const selected = parts.get(state.selected);
+  if (state.view === "board" && !state.scope && report.boards.length > 1) {
+    state.scope = { file: selected.file };
+    breadcrumb();
+  }
   state.selected = null;
+  const origin = state.inspectOrigin;
   renderList();
   $("diff-panel").hidden = true;
   $("map-panel").hidden = false;
-  renderMap();
+  renderMap(origin);
   resetImpact();
-  const origin = state.inspectOrigin;
   const mobile = matchMedia("(max-width: 700px)").matches;
   const root =
     origin?.region === "list" && !mobile ? $("part-list") : $("tiles");
-  const target = [...root.querySelectorAll("button")].find(
+  const mapTarget = [...$("tiles").querySelectorAll("button")].find(
     (n) => n.dataset.focusKey === origin?.key,
   );
+  const target = [...root.querySelectorAll("button")].find(
+    (n) => n.dataset.focusKey === origin?.key,
+  ) ?? mapTarget;
   (target ?? $("map-tab")).focus({ preventScroll: mobile });
   if (mobile) {
     window.scrollTo({ top: origin?.scrollY ?? 0, behavior: "instant" });
     (target ?? $("canvas")).scrollIntoView({ block: "nearest" });
+  } else {
+    $("map-panel").scrollTop = origin?.mapScrollTop ?? 0;
+    mapTarget?.scrollIntoView({ block: "nearest" });
   }
+  if (target?.dataset.id && state.hover !== target.dataset.id)
+    highlight(target.dataset.id);
 }
 function padPosition(part, pad) {
   const angle = (part.angle * Math.PI) / 180;
@@ -1340,11 +1392,14 @@ async function init() {
       };
     wireRoving($("part-list"), "list");
     wireRoving($("tiles"), "map");
-    // Reset only after leaving the canvas, not when crossing tile gutters.
-    for (const node of [$("canvas"), $("impact")]) {
-      node.addEventListener("pointerenter", cancelPreviewReset);
-      node.addEventListener("pointerleave", schedulePreviewReset);
-    }
+    document.addEventListener("pointermove", (event) => {
+      if (event.pointerType !== "touch")
+        lastHoverPoint = { x: event.clientX, y: event.clientY };
+    });
+    // The instrument includes the gap between the map and its reach readout.
+    const instrument = document.querySelector("main");
+    instrument.addEventListener("pointerenter", cancelPreviewReset);
+    instrument.addEventListener("pointerleave", schedulePreviewReset);
     $("impact").addEventListener("focusin", cancelPreviewReset);
     $("impact").addEventListener("focusout", (event) => {
       if (!event.relatedTarget?.closest("#impact, #tiles, #part-list")) resetImpact();
@@ -1371,13 +1426,14 @@ async function init() {
         box.height > 0 &&
         size !== mapSize
       ) {
-        const active = document.activeElement;
+        const active = document.activeElement,
+          hover = state.hover;
         const focusKey = $("tiles").contains(active)
           ? active.dataset.focusKey
           : null;
         mapSize = size;
         renderMap();
-        if (state.hover) highlight(state.hover);
+        if (hover) highlight(hover);
         else resetImpact();
         if (focusKey)
           [...$("tiles").querySelectorAll("button")]

@@ -18,6 +18,7 @@ const { values } = parseArgs({
     removed: { type: "boolean" },
     navigation: { type: "boolean" },
     detail: { type: "boolean" },
+    continuity: { type: "boolean" },
   },
 });
 const fixture = values.fixture
@@ -52,8 +53,13 @@ const detailCaptures = new Set([
   "readout-1280", "readout-1024",
   "board-neighbor-return",
 ]);
+const continuityCaptures = new Set([
+  "returned-part", "escape-return", "board-neighbor-return", "board-list-return", "touch-board-list-return", "tablet-return", "readable-sheet", "readable-root", "touch-return", "touch-root",
+]);
 const shouldCapture = (name) =>
-  out && (values.detail
+  out && (values.continuity
+    ? continuityCaptures.has(name)
+    : values.detail
     ? detailCaptures.has(name)
     : !values.navigation || selectedCaptures.has(name));
 const capture = async (name) => {
@@ -69,6 +75,7 @@ const previewSettled = (id) => page.waitForFunction((expected) => {
   return expected ? tile?.dataset.id === expected : !tile;
 }, id);
 const hoverPart = async (node) => {
+  await node.hover({ position: { x: 1, y: 1 } });
   await node.hover();
   await previewSettled(await node.getAttribute("data-id"));
 };
@@ -85,6 +92,32 @@ const assertReadoutFits = async (surface) => {
       .filter((node) => node.bottom > bounds.bottom - 4 || node.right > bounds.right - 4);
   });
   assert.deepEqual(clipped, [], "readout heading, leading nets, qualifiers and action fit in full");
+};
+const assertReturnedPart = async (surface, id) => {
+  assert.equal(await surface.locator(".tile.hovered").getAttribute("data-id"), id,
+    "Back visibly identifies the returned component for every input method");
+  const part = report.parts.find((p) => p.id === id);
+  assert.ok((await surface.locator("#impact strong").first().innerText()).startsWith(`${part.ref} ·`),
+    "the returned component is named in the reach readout");
+};
+const assertSheetReferences = async (surface) => {
+  const failures = await surface.locator(".tile").evaluateAll((nodes) => {
+    const bad = [];
+    for (const tile of nodes) {
+      const ref = tile.title.split(" · ")[0];
+      if (!ref.trim()) continue;
+      const label = tile.querySelector(".ref");
+      if (!label) { bad.push(`${ref}: missing`); continue; }
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      const text = range.getBoundingClientRect(), box = tile.getBoundingClientRect();
+      if (parseFloat(getComputedStyle(label).fontSize) < 9 ||
+          text.right > box.right - 3 || text.bottom > box.bottom - 3)
+        bad.push(`${ref}: clipped`);
+    }
+    return bad;
+  });
+  assert.deepEqual(failures, [], "every drilled reference is whole and readable");
 };
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}`);
@@ -402,7 +435,7 @@ try {
   const paths = await page.locator("#connections path").count();
   assert.match(
     await page.locator("#impact").innerText(),
-    new RegExp(`${paths} curves shown`),
+    new RegExp(`${paths} ${paths === 1 ? "curve" : "curves"} shown`),
   );
   // Move into the real gutter outside this tile, while staying inside the canvas.
   await page.locator("#search").focus();
@@ -482,6 +515,35 @@ try {
     await page.setViewportSize(viewport);
     await hoverPart(page.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`));
     await assertReadoutFits(page);
+    if (viewport.width === 1024 &&
+        report.head === "3bdc5547004c8244de5f37104410c363854e5634" &&
+        report.boards.includes("hardware/hackrf-one/hackrf-one.kicad_pcb")) {
+      const source = await tile.boundingBox();
+      const destination = await page.locator(".net-reach-more .net-reach-list").boundingBox();
+      const start = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+      const end = { x: destination.x + destination.width / 2, y: destination.y + destination.height / 2 };
+      await page.mouse.move(start.x, start.y);
+      const began = Date.now();
+      for (let step = 1; step <= 30; step++) {
+        const t = step / 30, eased = (1 - Math.cos(Math.PI * t)) / 2;
+        await page.mouse.move(start.x + (end.x - start.x) * eased,
+          start.y + (end.y - start.y) * eased);
+        await page.waitForTimeout(Math.max(0, began + 1300 * t - Date.now()));
+      }
+      assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), candidate.id,
+        "a slow accelerated pointer path to the net list preserves the source");
+      const canvas = await page.locator("#canvas").boundingBox();
+      await page.mouse.move(end.x, canvas.y - 6);
+      await page.waitForTimeout(200);
+      assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), candidate.id,
+        "the gap between the map and readout belongs to the same hover area");
+      const other = report.parts.find((p) => p.ref === "U24");
+      await page.locator(`.tile[data-id=${JSON.stringify(other.id)}]`).hover();
+      await page.waitForTimeout(220);
+      assert.equal(await page.locator(".tile.hovered").getAttribute("data-id"), other.id,
+        "resting on a different component still retargets");
+      await hoverPart(tile);
+    }
     if ([1280, 1024].includes(viewport.width)) await capture(`readout-${viewport.width}`);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -535,7 +597,21 @@ try {
   const reachedId = await reached.getAttribute("data-id");
   await reached.press("Enter");
   assert.equal(await page.locator("#diff-panel").getAttribute("data-id"), reachedId);
+  await page.locator(".close-diff").click();
+  await assertReturnedPart(page, reachedId);
+  await capture("returned-part");
+  const parkedPart = report.parts
+    .filter((p) => p.id !== reachedId)
+    .sort((a, b) => Object.keys(b.pins).length - Object.keys(a.pins).length)[0];
+  const parkedBox = await page.locator(`.tile[data-id=${JSON.stringify(parkedPart.id)}]`).boundingBox();
+  await tile.click();
+  await page.locator(".reach-details > summary").click();
+  await page.locator(`.reach-part[data-id=${JSON.stringify(reachedId)}]`).first().click();
+  await page.mouse.move(parkedBox.x + parkedBox.width / 2, parkedBox.y + parkedBox.height / 2);
   await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+  await assertReturnedPart(page, reachedId);
+  await capture("escape-return");
   await tile.click();
   assert.ok((await page.locator(".semantic tr").count()) > 1);
   if (values.fixture) {
@@ -806,6 +882,14 @@ try {
   if (populatedBoards.length > 1) {
     const choices = page.locator(".board-chooser button");
     assert.equal(await choices.count(), populatedBoards.length);
+    await page.locator(`.part-row[data-id=${JSON.stringify(candidate.id)}]`).click();
+    await page.locator(".close-diff").click();
+    await page.waitForTimeout(500);
+    assert.equal(await choices.count(), 0, "list inspection chooses its board for return");
+    await assertReturnedPart(page, candidate.id);
+    assert.ok(await page.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`).isVisible());
+    await capture("board-list-return");
+    await page.locator("#breadcrumbs button").first().click();
     await page.locator(`.part-row[data-id=${JSON.stringify(candidate.id)}]`).press("Enter");
     await page.locator(".reach-details > summary").click();
     const neighbor = page.locator(".reach-part").first();
@@ -816,6 +900,7 @@ try {
     assert.equal(await choices.count(), 0, "following a neighbor chooses its board for return");
     assert.equal(await page.evaluate(() => document.activeElement.dataset.id), neighborId,
       "Back focuses the exact neighbor instead of the board-view tab");
+    await assertReturnedPart(page, neighborId);
     assert.ok(await page.locator(`.tile[data-id=${JSON.stringify(neighborId)}]`).isVisible());
     await capture("board-neighbor-return");
     await page.locator("#breadcrumbs button").first().click();
@@ -851,6 +936,42 @@ try {
   );
   await capture("board");
   await page.locator("#map-tab").click();
+  if (report.boards.length === 1) {
+    await page.locator("#breadcrumbs button").first().click();
+    const sheets = await page.locator(".group-title").evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("aria-label")),
+    );
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 1024, height: 720 }]) {
+      await page.setViewportSize(viewport);
+      for (const name of sheets) {
+        await page.getByRole("button", { name, exact: true }).click();
+        await assertSheetReferences(page);
+        const target = page.locator(".tile").last();
+        await target.scrollIntoViewIfNeeded();
+        await page.mouse.move(1, 1);
+        await previewSettled(null);
+        if (viewport.width === 1280) {
+          if (name === sheets[0]) await capture("readable-sheet");
+          if (name === "Open Root sheet") await capture("readable-root");
+        }
+        await hoverPart(target);
+        const before = await target.boundingBox();
+        const scroll = await page.locator("#map-panel").evaluate((node) => node.scrollTop);
+        const id = await target.getAttribute("data-id");
+        await target.click();
+        await page.locator(".close-diff").click();
+        await assertReturnedPart(page, id);
+        const after = await target.boundingBox();
+        const returnedScroll = await page.locator("#map-panel").evaluate((node) => node.scrollTop);
+        assert.ok(Math.abs(after.y - before.y) <= 1,
+          `Back keeps the selected component in place: ${JSON.stringify({ name, viewport, before, after, scroll, returnedScroll })}`);
+        assert.ok(Math.abs(returnedScroll - scroll) <= 1);
+        assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight),
+          "desktop sheets scroll inside the map instead of the page");
+        await page.locator("#breadcrumbs button").first().click();
+      }
+    }
+  }
   for (const width of [720, 800, 390]) {
     await page.setViewportSize({ width, height: 844 });
     if (report.sheetRenames?.length) {
@@ -954,6 +1075,10 @@ try {
   await touchPage.locator("#reach").selectOption("direct");
   await touchPage.locator("#ground").tap();
   await touchCapture("touch-reach");
+  const mixedPart = report.parts
+    .filter((p) => p.id !== candidate.id)
+    .sort((a, b) => Object.keys(b.pins).length - Object.keys(a.pins).length)[0];
+  const mixedPark = await touchPage.locator(`.tile[data-id=${JSON.stringify(mixedPart.id)}]`).boundingBox();
   await touchPage
     .getByRole("button", { name: `Open ${candidate.ref} diff`, exact: true })
     .tap();
@@ -982,7 +1107,10 @@ try {
     ),
     "touch inspector has no horizontal overflow",
   );
+  await touchPage.mouse.move(mixedPark.x + mixedPark.width / 2, mixedPark.y + mixedPark.height / 2);
   await touchPage.locator(".close-diff").tap();
+  await touchPage.waitForTimeout(500);
+  await assertReturnedPart(touchPage, candidate.id);
   const point = await tapSamePoint();
   const previewBox = await touchTile.boundingBox();
   assert.ok(
@@ -1059,6 +1187,20 @@ try {
     "outside touch dismisses preview",
   );
   await touchPage.locator("#board-tab").tap();
+  if (populatedBoards.length > 1) {
+    await touchPage.locator("#toggle-changes").tap();
+    await touchPage.locator("#only-changed").uncheck();
+    const row = touchPage.locator(`.part-row[data-id=${JSON.stringify(candidate.id)}]`);
+    await row.tap();
+    await row.tap();
+    await touchPage.locator(".close-diff").tap();
+    await touchPage.waitForTimeout(500);
+    assert.equal(await touchPage.locator(".board-chooser button").count(), 0,
+      "phone list inspection chooses the originating board");
+    await assertReturnedPart(touchPage, candidate.id);
+    assert.equal(await touchPage.evaluate(() => document.activeElement.dataset.id), candidate.id);
+    await touchCapture("touch-board-list-return");
+  }
   await touchPage.locator("#map-tab").tap();
   await tapSamePoint();
   await touchPage.keyboard.press("Escape");
@@ -1108,12 +1250,57 @@ try {
       "two physical taps inspect the same small component");
     await touchPage.locator(".close-diff").tap();
     assert.equal(await touchPage.evaluate(() => document.activeElement.dataset.id), smallest.id);
+    await assertReturnedPart(touchPage, smallest.id);
+    await touchCapture("touch-return");
     const restored = await small.boundingBox();
     assert.ok(restored.y >= 0 && restored.y + restored.height <= 844,
       "Back restores the selected target inside the long sheet map");
   }
 
+  if (report.boards.length === 1) {
+    await touchPage.locator("#breadcrumbs button").first().tap();
+    const names = await touchPage.locator(".group-title").evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("aria-label")),
+    );
+    for (const name of names) {
+      await touchPage.getByRole("button", { name, exact: true }).tap();
+      await assertSheetReferences(touchPage);
+      if (name === "Open Root sheet") {
+        await touchPage.locator(".tile").last().tap();
+        await assertReadoutFits(touchPage);
+        await touchCapture("touch-root");
+      }
+      await touchPage.locator("#breadcrumbs button").first().tap();
+    }
+  }
   await touch.close();
+  for (const [width, hasTouch] of [[701, false], [720, false], [768, false], [900, false], [768, true]]) {
+    const tablet = await browser.newContext({
+      viewport: { width, height: hasTouch ? 1024 : 900 },
+      hasTouch,
+      isMobile: hasTouch,
+    });
+    const surface = await tablet.newPage();
+    surface.on("pageerror", (e) => errors.push(e.message));
+    await surface.goto(`http://127.0.0.1:${server.address().port}`);
+    const subject = surface.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`);
+    await subject.waitFor();
+    if (hasTouch) {
+      await subject.tap();
+      await subject.tap();
+      await surface.locator(".close-diff").tap();
+    } else {
+      await subject.click();
+      await surface.locator(".close-diff").click();
+    }
+    await surface.waitForTimeout(500);
+    await assertReturnedPart(surface, candidate.id);
+    assert.equal(await surface.evaluate(() => document.activeElement.dataset.id), candidate.id,
+      "tablet resize preserves focus on the returned part");
+    if (width === 720 && shouldCapture("tablet-return"))
+      await surface.screenshot({ path: `${out}/tablet-return.png`, animations: "disabled" });
+    await tablet.close();
+  }
   if (values.fixture && !values.removed) {
     // Exercise presentation-only cases without changing the engine fixture or classification.
     const presentationReport = structuredClone(report);
