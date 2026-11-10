@@ -1,5 +1,5 @@
-<img src="assets/icon.svg" width="64" height="64" alt="">
-
 # boardmap
 
-Created in [T3 Code](https://t3.codes).
+See what a PCB change touches. Local visual review for KiCad git repositories.
+
+MIT licensed. Under development.
