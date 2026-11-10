@@ -1313,7 +1313,7 @@ async function init() {
       if (sheetLabels.length) counts.push(`${sheetLabels.length} sheet`);
       if (netLabels.length) counts.push(`${netLabels.length} net`);
       details.append(
-        el("summary", `${counts.join(" · ")} labels renamed`),
+        el("summary", `${counts.join(" · ")} ${sheetLabels.length + netLabels.length === 1 ? "label" : "labels"} renamed`),
       );
       const list = el("ul");
       for (const [kind, renames] of [["Sheet", sheetLabels], ["Net", netLabels]])
