@@ -96,11 +96,25 @@ function matches(p) {
     .toLowerCase()
     .includes(state.query);
 }
+function displaySheet(p) {
+  if (p.status !== "removed" || !p.path) return p.sheet;
+  const path = p.path.split("/").slice(0, -1).join("/");
+  const labels = new Set((report.sheetRenames ?? [])
+    .filter((rename) => rename.file === p.file && rename.path === path &&
+      rename.before === p.sheet).map((rename) => rename.after));
+  return labels.size === 1 ? [...labels][0] : p.sheet;
+}
+function changeFields(p) {
+  return orderedChanges(p).map((c) => propertyPriority(c) ?? {
+    pins: "pin nets", pads: "pad geometry", fields: "properties",
+    attributes: "assembly", angle: "rotation",
+  }[c.field] ?? c.field);
+}
 function inScope(p) {
   return (
     !state.scope ||
     (p.file === state.scope.file &&
-      (!state.scope.sheet || p.sheet === state.scope.sheet))
+      (!state.scope.sheet || displaySheet(p) === state.scope.sheet))
   );
 }
 function breadcrumb() {
@@ -173,7 +187,7 @@ function renderList() {
       group = kind;
       const heading = el("h3", undefined, "list-heading");
       heading.append(
-        el("span", group),
+        el("span", group === "Electrical" ? "Electrical edits" : group),
         el(
           "span",
           shown.filter((p) => changeGroup(p) === group).length,
@@ -205,21 +219,10 @@ function renderList() {
     const meta = el("span", undefined, "part-meta");
     meta.append(
       el("strong", p.ref),
-      el("small", `${p.value || p.footprint} · ${shortFile(p.file)}`),
+      el("small", `${p.value || p.footprint}${report.boards.length > 1 ? ` · ${shortFile(p.file)}` : ""}`),
     );
     if (p.status === "modified") {
-      const fields = orderedChanges(p).map(
-        (c) =>
-          propertyPriority(c) ??
-          {
-            pins: "pin nets",
-            pads: "pad geometry",
-            fields: "properties",
-            attributes: "assembly",
-            angle: "rotation",
-          }[c.field] ??
-          c.field,
-      );
+      const fields = changeFields(p);
       const summary = el(
         "small",
         fields.slice(0, 3).join(" · ") +
@@ -335,7 +338,7 @@ function tile(p, r, parent) {
   const node = el(
     "button",
     undefined,
-    `tile ${p.status}${isElectrical(p) ? " electrical" : ""}`,
+    `tile ${p.status}${isElectrical(p) ? " electrical" : ""}${changeGroup(p) === "Metadata" ? " metadata" : ""}`,
   );
   node.dataset.id = p.id;
   node.dataset.focusKey = `part:${p.id}`;
@@ -376,6 +379,9 @@ function renderMap() {
   syncRoving($("tiles"), "map");
 }
 function buildMap() {
+  $("map-scale-note").textContent = state.view === "board"
+    ? "Footprint centers · size is schematic"
+    : "Area weighted by numbered pads, minimum 3 · grouped by board / sheet";
   const root = $("tiles");
   root.replaceChildren();
   $("connections").replaceChildren();
@@ -397,7 +403,7 @@ function buildMap() {
   const groupByBoard = !state.scope && boardFiles.length > 1;
   const groups = new Map();
   for (const p of shown) {
-    const key = groupByBoard ? p.file : p.sheet;
+    const key = groupByBoard ? p.file : displaySheet(p);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
@@ -589,10 +595,10 @@ function highlight(id) {
     );
   }
   const visible = result.ids.filter((id) => centers.has(id)).length;
-  const title = `${p.ref} · ${result.ids.length} ${state.transitive ? "transitively reachable parts" : "shared-net neighbors"}`;
+  const title = `${p.ref} · ${result.ids.length} ${state.transitive ? `transitively reachable ${result.ids.length === 1 ? "part" : "parts"}` : `shared-net ${result.ids.length === 1 ? "neighbor" : "neighbors"}`}`;
   impact(
     title,
-    `${result.nets.length} nets · ${visible} highlighted in view · ${result.ids.length - visible} outside this view. ${dense ? `${edges.length} curves shown, only links involving electrical, added or removed neighbors. ` : `${edges.length} curves shown. `}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation. " : ""}${result.nets.slice(0, 4).join(" · ")}${result.nets.length > 4 ? " …" : ""}`,
+    `${p.status === "modified" ? `Changed: ${changeFields(p).join(", ")}. ` : `${p.status[0].toUpperCase() + p.status.slice(1)}. `}${result.nets.length} ${result.nets.length === 1 ? "net" : "nets"} · ${visible} highlighted in view · ${result.ids.length - visible} outside this view. ${dense ? `${edges.length} curves shown, only links involving electrical, added or removed neighbors. ` : `${edges.length} curves shown. `}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation. " : ""}${result.nets.slice(0, 4).join(" · ")}${result.nets.length > 4 ? " …" : ""}`,
   );
   if (state.touchPreview === id) {
     const open = el("button", `Open ${p.ref} diff`, "open-preview");
@@ -626,13 +632,29 @@ function resetImpact() {
     );
 }
 function format(value) {
-  if (value === undefined || value === null || value === "") return "∅";
+  if (value === undefined || value === null) return "∅";
+  if (value === "") return '"" (empty string)';
   if (typeof value === "object") return JSON.stringify(value, null, 2);
   return String(value);
+}
+function assembly(value) {
+  if (!Array.isArray(value)) return format(value);
+  const labels = { smd: "SMD", through_hole: "Through-hole",
+    exclude_from_bom: "Not in BOM", exclude_from_pos_files: "Not in position file",
+    dnp: "DNP", board_only: "Board only",
+    allow_missing_courtyard: "Allow missing courtyard",
+    allow_soldermask_bridges: "Allow solder mask bridges" };
+  return value.length ? value.map((flag) => labels[flag] ?? flag).join(", ") : "None";
+}
+function setChangesExpanded(expanded) {
+  $("toggle-changes").setAttribute("aria-expanded", expanded);
+  $("toggle-changes").textContent = expanded ? "Hide changes" : "Show changes";
+  document.querySelector("aside").classList.toggle("expanded", expanded);
 }
 function openDiff(p, origin) {
   state.inspectOrigin = origin ?? { region: "map", key: `part:${p.id}` };
   state.selected = p.id;
+  if (matchMedia("(max-width: 700px)").matches) setChangesExpanded(false);
   resetImpact();
   renderList();
   $("map-panel").hidden = true;
@@ -670,6 +692,7 @@ function openDiff(p, origin) {
                     propertyPriority(c).slice(1)
                   : null) ??
                 {
+                  attributes: "Assembly",
                   pads: "Pad geometry",
                   fields: "Properties",
                   x: "X position",
@@ -687,6 +710,13 @@ function openDiff(p, origin) {
       "diff-summary",
     ),
   );
+  const context = el("dl", undefined, "swap-context");
+  for (const c of orderedChanges(p)) {
+    if (!["value", "footprint"].includes(c.field)) continue;
+    context.append(el("dt", c.field === "value" ? "Value" : "Footprint"),
+      el("dd", `${format(c.before)} → ${format(c.after)}`));
+  }
+  if (context.children.length) panel.append(context);
   const regions = el("div", undefined, "regions");
   const extent =
     Math.max(
@@ -795,8 +825,8 @@ function openDiff(p, origin) {
             attributes: "Assembly",
             fields: "Properties",
           }[c.field] ?? c.field,
-          c.before,
-          c.after,
+          c.field === "attributes" ? assembly(c.before) : c.before,
+          c.field === "attributes" ? assembly(c.after) : c.after,
         );
     }
     if (!changes.length)
@@ -812,6 +842,7 @@ function openDiff(p, origin) {
       );
     for (const key of ["value", "footprint", "sheet", "side"])
       row(key[0].toUpperCase() + key.slice(1), p.before?.[key], p.after?.[key]);
+    row("Assembly", assembly(p.before?.attributes), assembly(p.after?.attributes));
     for (const key of Object.keys((p.after ?? p.before).fields).sort())
       row(`Property: ${key}`, p.before?.fields[key], p.after?.fields[key]);
   }
@@ -829,11 +860,14 @@ function openDiff(p, origin) {
   }
   panel.scrollTop = 0;
   inspectorImpact(p);
-  close.focus();
+  close.focus({ preventScroll: true });
+  if (matchMedia("(max-width: 700px)").matches)
+    head.scrollIntoView({ block: "start" });
 }
 function inspectorImpact(p) {
+  const count = reach(report, p.id, state).ids.length;
   impact(
-    `${p.ref} · ${reach(report, p.id, state).ids.length} ${state.transitive ? "transitively reachable parts" : "connected parts"}`,
+    `${p.ref} · ${count} ${state.transitive ? "transitively reachable" : "connected"} ${count === 1 ? "part" : "parts"}`,
     `Pad geometry, connectivity and footprint properties, compared across base and head. White pads are unchanged; red and green pads changed. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
   );
 }
@@ -846,10 +880,12 @@ function closeDiff() {
   renderMap();
   resetImpact();
   const origin = state.inspectOrigin;
-  const root = origin?.region === "list" ? $("part-list") : $("tiles");
+  const mobile = matchMedia("(max-width: 700px)").matches;
+  const root = origin?.region === "list" && !mobile ? $("part-list") : $("tiles");
   const target = [...root.querySelectorAll("button")]
     .find((n) => n.dataset.focusKey === origin?.key);
-  (target ?? $("map-tab")).focus();
+  (target ?? $("map-tab")).focus({ preventScroll: mobile });
+  if (mobile) $("canvas").scrollIntoView({ block: "nearest" });
 }
 function padPosition(part, pad) {
   const angle = (part.angle * Math.PI) / 180;
@@ -1066,11 +1102,7 @@ async function init() {
     $("toggle-changes").onclick = () => {
       const expanded =
         $("toggle-changes").getAttribute("aria-expanded") !== "true";
-      $("toggle-changes").setAttribute("aria-expanded", expanded);
-      $("toggle-changes").textContent = expanded
-        ? "Hide changes"
-        : "Show changes";
-      document.querySelector("aside").classList.toggle("expanded", expanded);
+      setChangesExpanded(expanded);
     };
     $("search").oninput = (e) => {
       state.query = e.target.value.trim().toLowerCase();

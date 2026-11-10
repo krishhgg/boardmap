@@ -51,7 +51,7 @@
           <div id="part-list" role="group" aria-label="Components" aria-describedby="list-help"></div>
         </div>
         <div class="aside-foot">
-          <span id="list-help">↑ ↓, Home / End move through components.</span><br />Enter / Space inspect. Tab moves to Reach.
+          <span id="list-help">↑ ↓, Home / End move through components.</span><br />Enter / Space inspect. Tab moves to Reach.<br /><span id="map-help">Map: arrows step in list order.<br />Home / End jump. Enter / Space open.</span>
         </div>
       </aside>
       <main>
@@ -82,15 +82,14 @@
             <svg id="connections" aria-hidden="true"></svg>
             <div id="map-empty" hidden>No components match this search.</div>
           </div>
-          <p id="map-help" class="navigation-hint">Map keyboard: arrows move through controls in list order · Home / End jump · Enter / Space open</p>
           <div class="legend">
             <span><i class="electrical"></i>Electrical</span
             ><span><i class="modified"></i>Metadata</span
             ><span><i class="added"></i>Added</span
             ><span><i class="removed"></i>Removed</span
             ><span><i class="unchanged"></i>Unchanged</span
-            ><span class="legend-note"
-              >Area = numbered pads · grouped by board / sheet</span
+            ><span id="map-scale-note" class="legend-note"
+              >Area weighted by numbered pads, minimum 3 · grouped by board / sheet</span
             >
           </div>
         </div>
