@@ -22,7 +22,10 @@ test('real upstream boards parse and retain nets and footprint geometry',()=> {
     const parts = read(fixture(name));
     assert.ok(parts.length>10); assert.ok(parts.some(p=>Object.values(p.pins).flat().some(Boolean)));
     assert.ok(parts.every(p=>Number.isFinite(p.x)));
-    assert.equal(compare(parts,parts).stats.changed,0);
+    const same = compare(parts,parts);
+    assert.equal(same.stats.changed,0);
+    assert.ok(same.stats.nets>0);
+    assert.ok(Object.values(same.nets).every(n=>n.status==='unchanged'));
   }
 });
 test('component, pin-net, addition, removal, and pad changes are semantic',()=> {
@@ -71,4 +74,23 @@ test('loopback server rejects hostile Host, Origin, paths and methods',async()=>
     assert.equal((await fetch(url+'/LICENSE')).status,404);
     assert.equal((await fetch(url+'/api/report',{method:'POST'})).status,405);
   } finally { await new Promise(resolve=>server.close(resolve)); }
+});
+
+test('drill changes are detected and pad serialization order is ignored',()=> {
+  const one = fp('J1','A').slice(0,-1)+' (pad "2" thru_hole circle (drill 0.8) (net 2 "B")))';
+  const a = read(board(one));
+  const b = read(board(one.replace('drill 0.8','drill 1.2')));
+  assert.equal(compare(a,b).parts[0].status,'modified');
+  const c = structuredClone(a); c[0].pads.reverse();
+  assert.equal(compare(a,c).stats.changed,0);
+});
+test('duplicate references match by UUID jointly across revisions',()=> {
+  const a = fp('TP','A').slice(0,-1)+' (uuid "first"))';
+  const b = fp('TP','A').slice(0,-1)+' (uuid "second"))';
+  const report = compare(read(board(a)),read(board(a,b)));
+  assert.deepEqual(report.parts.map(p=>p.status),['unchanged','added']);
+});
+test('git reads work from repository subdirectories',()=> {
+  const report = buildReport(new URL('../src',import.meta.url).pathname,'HEAD','HEAD');
+  assert.ok(report.parts.length>10);
 });

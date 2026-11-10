@@ -14,7 +14,8 @@ export function readBoard(text, file) {
       const pos = child(p, 'at') ?? [], size = child(p, 'size') ?? [], net = child(p, 'net');
       return {number: p[1], type: p[2], shape: p[3], x: Number(pos[1] ?? 0), y: Number(pos[2] ?? 0),
         angle: Number(pos[3] ?? 0), w: Number(size[1] ?? 1), h: Number(size[2] ?? 1),
-        net: net?.[2] ?? netNames.get(net?.[1]) ?? ''};
+        net: net?.[2] ?? netNames.get(net?.[1]) ?? '',
+        drill: child(p,'drill')?.slice(1) ?? [], layers: child(p,'layers')?.slice(1).sort() ?? []};
     });
     const pins = {};
     for (const pad of pads) {

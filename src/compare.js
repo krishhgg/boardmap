@@ -3,6 +3,16 @@ const stable = object => Object.fromEntries(Object.entries(object).sort(([a],[b]
 const ground = name => /^(GND|GNDA|GNDD|AGND|DGND|PGND|Earth|Chassis)$/i.test(name.split('/').at(-1));
 export {ground};
 export function compare(before, after, metadata = {}) {
+  const duplicates = new Set();
+  for (const parts of [before,after]) {
+    const seen = new Set();
+    for (const p of parts) { const key = `${p.file}::${p.ref}`; if (seen.has(key)) duplicates.add(key); seen.add(key); }
+  }
+  const normalize = parts => parts.map(p => ({...p,
+    id: `${p.file}::${p.ref}${duplicates.has(`${p.file}::${p.ref}`) ? `::${p.uuid || p.path}` : ''}`,
+    pads: [...p.pads].sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  }));
+  before = normalize(before); after = normalize(after);
   const old = new Map(before.map(p => [p.id,p])), fresh = new Map(after.map(p => [p.id,p]));
   const parts = [...new Set([...old.keys(),...fresh.keys()])].sort().map(id => {
     const a = old.get(id), b = fresh.get(id), changes = [];
@@ -19,12 +29,12 @@ export function compare(before, after, metadata = {}) {
   });
   const nets = {};
   for (const part of parts) {
-    for (const state of [part.before,part.after]) {
+    for (const [revision,state] of [['before',part.before],['after',part.after]]) {
       if (!state) continue;
       for (const name of new Set(Object.values(state.pins).flat().filter(Boolean))) {
         const key = `${part.file}::${name}`;
         if (!Object.hasOwn(nets,key)) nets[key] = {name,file:part.file,ground:ground(name),before:[],after:[]};
-        const list = state === part.before ? nets[key].before : nets[key].after;
+        const list = nets[key][revision];
         if (!list.includes(part.id)) list.push(part.id);
       }
     }

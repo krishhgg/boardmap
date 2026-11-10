@@ -10,7 +10,7 @@ export function revision(repo,ref) {
 }
 export function buildReport(repo,base,head,{board} = {}) {
   const a = revision(repo,base), b = revision(repo,head);
-  const files = sha => git(repo,['ls-tree','-r','--name-only','-z',sha]).split('\0').filter(p=>p.endsWith('.kicad_pcb'));
+  const files = sha => git(repo,['ls-tree','--full-tree','-r','--name-only','-z',sha]).split('\0').filter(p=>p.endsWith('.kicad_pcb'));
   const af = files(a), bf = files(b), all = [...new Set([...af,...bf])].sort();
   if (!all.length) throw new Error('No .kicad_pcb files at either revision. Schematic-only projects are not supported yet.');
   const changed = new Set(git(repo,['diff','--name-only','--no-renames','-z',a,b]).split('\0'));
