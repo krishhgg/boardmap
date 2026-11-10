@@ -17,5 +17,13 @@
   },
   "devDependencies": {
     "playwright": "^1.65.0"
-  }
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "web/",
+    "assets/",
+    "README.md",
+    "LICENSE"
+  ]
 }
