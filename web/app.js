@@ -423,7 +423,7 @@ function renderMap() {
       );
       root.append(node);
     },
-    90,
+    w < 500 ? 140 : 90,
   );
 }
 function renderBoard(shown, w, h) {

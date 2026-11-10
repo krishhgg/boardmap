@@ -991,8 +991,8 @@ footer {
     font-size: 11px;
   }
   #impact {
-    height: auto;
-    min-height: 84px;
+    height: 112px;
+    min-height: 112px;
     padding: 8px;
     margin-bottom: 8px;
     gap: 8px;

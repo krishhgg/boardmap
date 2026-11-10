@@ -283,6 +283,11 @@ try {
     );
   }
   if (report.parts.some((p) => p.status === "unchanged")) {
+    // Exercise non-Mac text metrics and classic scrollbars during resize.
+    const platformStyle = await page.addStyleTag({
+      content:
+        ':root { font-family: Arial, sans-serif; } ::-webkit-scrollbar { width: 15px; height: 15px; }',
+    });
     for (const width of [1100, 390, 1440]) {
       const unchanged = page.locator(".tile.unchanged").first(),
         id = await unchanged.getAttribute("data-id");
@@ -301,6 +306,7 @@ try {
         "exact unchanged tile retains focus after resize and Escape",
       );
     }
+    await platformStyle.evaluate((node) => node.remove());
   }
   for (const status of ["modified", "added", "removed"]) {
     const row = page.locator(`.part-row.${status}`).first();
@@ -467,6 +473,8 @@ try {
     await touchPage.locator("#toggle-changes").getAttribute("aria-expanded"),
     "true",
   );
+  if (!report.stats.changed)
+    await touchPage.locator("#only-changed").uncheck();
   await touchPage.locator(".part-row").first().tap();
   assert.ok(
     await touchPage.locator("#map-panel").isVisible(),
