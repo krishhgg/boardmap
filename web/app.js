@@ -2,7 +2,8 @@ import { pack, touchSheetHeight } from "/layout.js";
 import { reach } from "/compare.js";
 import {
   orderedChanges,
-  propertyPriority,
+  propertyReasons,
+  legacyAssemblyMigration,
   changedPins,
   changeGroup,
   isElectrical,
@@ -10,6 +11,7 @@ import {
   changedPadNumbers,
   changedMechanicalPads,
   rankedNetReach,
+  netReachGroups,
 } from "/review.js";
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, className) => {
@@ -23,6 +25,14 @@ const svgEl = (tag, attrs = {}) => {
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
   return n;
 };
+function netLabel(name) {
+  const label = el("span");
+  name.split("/").forEach((segment, index) => {
+    if (index) label.append(document.createTextNode("/"), el("wbr"));
+    label.append(document.createTextNode(segment));
+  });
+  return label;
+}
 const state = {
   scope: null,
   view: "map",
@@ -32,7 +42,7 @@ const state = {
   query: "",
   transitive: false,
   includeGround: false,
-  roving: { list: null, map: null },
+  roving: { list: null, map: null, connections: null },
   inspectOrigin: null,
   previewOrigin: null,
 };
@@ -106,7 +116,10 @@ function schedulePreviewReset(event) {
   cancelPreviewReset();
   previewReset = setTimeout(() => {
     const focused = document.activeElement;
-    if (focused.matches(".tile, .part-row") && focused.dataset.id)
+    if (
+      focused.matches(".tile:focus-visible, .part-row:focus-visible") &&
+      focused.dataset.id
+    )
       highlight(focused.dataset.id);
     else if (!focused.closest("#impact")) resetImpact();
   }, 120);
@@ -145,18 +158,19 @@ function displaySheet(p) {
   return labels.size === 1 ? [...labels][0] : p.sheet;
 }
 function changeFields(p) {
-  return orderedChanges(p).map(
-    (c) =>
-      propertyPriority(c, p) ??
-      {
-        pins: "pin nets",
-        pads: "pad geometry",
-        fields: "properties",
-        attributes: "assembly",
-        angle: "rotation",
-      }[c.field] ??
-      c.field,
-  );
+  const labels = {
+    pins: "pin nets",
+    pads: "pad geometry",
+    fields: "properties",
+    attributes: "assembly",
+    angle: "rotation",
+    x: "position",
+    y: "position",
+  };
+  return [...new Set(orderedChanges(p).flatMap((c) => {
+    const reasons = propertyReasons(c, p);
+    return reasons.length ? reasons : [labels[c.field] ?? c.field];
+  }))];
 }
 function inScope(p) {
   return (
@@ -231,6 +245,7 @@ function renderList() {
   let group;
   for (const p of shown) {
     const kind = changeGroup(p);
+    const rewired = changedPins(p).length;
     if (kind !== group) {
       group = kind;
       const heading = el("h3", undefined, "list-heading");
@@ -261,7 +276,7 @@ function renderList() {
     row.classList.toggle("selected", state.selected === p.id);
     row.setAttribute(
       "aria-label",
-      `${p.ref}, ${p.value}, ${p.status}, ${shortFile(p.file)}`,
+      `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}, ${shortFile(p.file)}`,
     );
     row.append(el("span", mark(p), "status-mark"));
     const meta = el("span", undefined, "part-meta");
@@ -284,7 +299,6 @@ function renderList() {
       meta.append(summary);
     }
     row.append(meta);
-    const rewired = changedPins(p).length;
     if (rewired) {
       const count = el(
         "span",
@@ -323,7 +337,7 @@ function wirePart(node, p) {
     if (event.pointerType !== "touch") highlight(p.id);
   };
   node.onfocus = () => {
-    if (!touchClick) highlight(p.id);
+    if (!touchClick && node.matches(":focus-visible")) highlight(p.id);
   };
   node.onblur = (event) => {
     if (!state.touchPreview && !event.relatedTarget?.closest("#impact")) resetImpact();
@@ -350,18 +364,25 @@ function position(node, r, gap = 2) {
   });
 }
 function tile(p, r, parent) {
+  const kind = changeGroup(p);
   const node = el(
     "button",
     undefined,
-    `tile ${p.status}${isElectrical(p) ? " electrical" : ""}${changeGroup(p) === "Metadata" ? " metadata" : ""}`,
+    `tile ${p.status}${isElectrical(p) ? " electrical" : ""}${kind === "Metadata" ? " metadata" : ""}`,
   );
   node.dataset.id = p.id;
   node.dataset.focusKey = `part:${p.id}`;
   position(node, r);
-  node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}`);
+  const rewired = changedPins(p).length;
+  node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}`);
   node.title = `${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
   // Measure the whole reference in the loaded utility face. Never render a clipped ID.
-  const available = r.w - 16;
+  const compact = r.w < 65 || r.h < 40;
+  const horizontalPadding = compact ? 3 : 5;
+  const verticalPadding = compact ? 2 : 5;
+  node.style.padding = `${verticalPadding}px ${horizontalPadding}px`;
+  const available = r.w - 6 - horizontalPadding * 2;
+  const availableHeight = r.h - 6 - verticalPadding * 2;
   const measure = textMetrics;
   const family = getComputedStyle(document.documentElement).getPropertyValue(
     "--mono",
@@ -369,9 +390,13 @@ function tile(p, r, parent) {
   let fontSize = 12;
   for (; fontSize >= 9; fontSize--) {
     measure.font = `500 ${fontSize}px ${family}`;
-    if (measure.measureText(p.ref).width <= available) break;
+    if (
+      measure.measureText(p.ref).width <= available &&
+      fontSize * 1.4 <= availableHeight
+    )
+      break;
   }
-  if (fontSize >= 9 && r.h - 14 >= fontSize * 1.4) {
+  if (fontSize >= 9) {
     const label = el("span", p.ref, "ref");
     label.style.fontSize = `${fontSize}px`;
     node.append(label);
@@ -633,7 +658,10 @@ function highlight(id) {
       const row = el("li");
       row.dataset.net = net.name;
       row.dataset.count = net.count;
-      row.append(el("span", net.name), el("strong", `${net.count} ${net.count === 1 ? "part" : "parts"}`));
+      row.append(
+        netLabel(net.name),
+        el("strong", `${net.count} ${net.count === 1 ? "part" : "parts"}`),
+      );
       lists[index < 3 ? 0 : 1].append(row);
     }
     body.insertBefore(lists[0], body.querySelector("p"));
@@ -658,7 +686,9 @@ function impact(title, text) {
   if (count)
     heading.append(count[1], el("span", count[2], "reach-count"), count[3]);
   else heading.textContent = title;
-  body.append(heading, el("p", text));
+  const description = el("p", text);
+  description.setAttribute("aria-live", "off");
+  body.append(heading, description);
   box.append(body);
   return body;
 }
@@ -716,6 +746,13 @@ function openDiff(p, origin) {
   const head = el("div", undefined, "diff-header"),
     title = el("h2", p.ref);
   title.append(el("small", p.status));
+  const classification = changeGroup(p);
+  if (p.status === "modified" || classification === "Metadata")
+    title.append(el(
+      "span",
+      classification === "Electrical" ? "Electrical edits" : classification,
+      `priority-tag ${isElectrical(p) ? "electrical" : ""}`,
+    ));
   const close = el("button", "← Back to map", "close-diff");
   close.onclick = closeDiff;
   head.append(title, close);
@@ -733,44 +770,67 @@ function openDiff(p, origin) {
     el(
       "p",
       p.status === "modified"
-        ? `${pinCount ? `${pinCount} ${pinCount === 1 ? "pin rewired" : "pins rewired"}. ` : ""}${orderedChanges(
-            p,
-          )
-            .filter((c) => c.field !== "pins")
-            .map(
-              (c) =>
-                (propertyPriority(c, p)
-                  ? propertyPriority(c, p)[0].toUpperCase() +
-                    propertyPriority(c, p).slice(1)
-                  : null) ??
-                {
-                  attributes: "Assembly",
-                  pads: "Pad geometry",
-                  fields: "Properties",
-                  x: "X position",
-                  y: "Y position",
-                  angle: "Rotation",
-                }[c.field] ??
-                c.field[0].toUpperCase() + c.field.slice(1),
-            )
-            .join(
-              ", ",
-            )}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount} ${padCount === 1 ? "pad change" : "pad changes"} highlighted.`
+        ? `${pinCount ? `${pinCount} ${pinCount === 1 ? "pin rewired" : "pins rewired"}. ` : ""}${changeFields(p)
+            .filter((field) => field !== "pin nets")
+            .map((field) => field[0].toUpperCase() + field.slice(1)).join(", ")}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount} ${padCount === 1 ? "pad group" : "pad groups"} highlighted.`
         : p.status === "unchanged"
           ? "No semantic changes in this component."
           : `${p.status === "added" ? "Added in head" : "Removed from head"}. All present pads highlighted.`,
       "diff-summary",
     ),
   );
+  if (legacyAssemblyMigration(p)) {
+    const note = el(
+      "p",
+      "Verified legacy assembly-metadata migration between the custom DNP field and BOM exclusion. This flag transition is metadata; all raw values remain below. ",
+      "classification-note",
+    );
+    const link = el("a", "Rule details on GitHub");
+    link.href = "https://github.com/krishhgg/boardmap/blob/main/docs/assembly-priority.md";
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    note.append(link);
+    panel.append(note);
+  }
   const context = el("dl", undefined, "swap-context");
   for (const c of orderedChanges(p)) {
-    if (!["value", "footprint"].includes(c.field)) continue;
-    context.append(
-      el("dt", c.field === "value" ? "Value" : "Footprint"),
-      el("dd", `${format(c.before)} → ${format(c.after)}`),
-    );
+    if (["value", "footprint"].includes(c.field))
+      context.append(
+        el("dt", c.field === "value" ? "Value" : "Footprint"),
+        el("dd", `${format(c.before)} → ${format(c.after)}`),
+      );
+    if (c.field === "fields")
+      for (const key of new Set([...Object.keys(c.before), ...Object.keys(c.after)])) {
+        const isolated = {
+          field: "fields",
+          before: { [key]: c.before[key] },
+          after: { [key]: c.after[key] },
+        };
+        if (propertyReasons(isolated, p).length)
+          context.append(
+            el("dt", key),
+            el("dd", `${format(c.before[key])} → ${format(c.after[key])}`),
+          );
+      }
+    if (c.field === "attributes" && propertyReasons(c, p).length)
+      context.append(
+        el("dt", "Native DNP"),
+        el("dd", `${c.before.includes("dnp") ? "On" : "Off"} → ${c.after.includes("dnp") ? "On" : "Off"}`),
+      );
   }
   if (context.children.length) panel.append(context);
+  const connected = el("details", undefined, "reach-details");
+  connected.append(el("summary"));
+  const connectedParts = el("div", undefined, "reach-parts");
+  connectedParts.setAttribute("role", "group");
+  connectedParts.setAttribute("aria-label", "Reached parts; arrows and Home or End browse, Enter inspects");
+  connected.append(connectedParts);
+  wireRoving(connectedParts, "connections");
+  connected.ontoggle = () => {
+    if (connected.open && connected.isConnected && state.selected === p.id)
+      inspectorImpact(p);
+  };
+  panel.append(connected);
   const regions = el("div", undefined, "regions");
   const extent =
     Math.max(
@@ -910,7 +970,7 @@ function openDiff(p, origin) {
     details.append(
       el(
         "summary",
-        `Changed pad geometry · ${geometryTable.rows.length - 1} ${geometryTable.rows.length === 2 ? "pad" : "pads"}`,
+        `Changed pad geometry · ${geometryTable.rows.length - 1} ${geometryTable.rows.length === 2 ? "pad group" : "pad groups"}`,
       ),
       geometryTable,
     );
@@ -923,11 +983,52 @@ function openDiff(p, origin) {
     window.scrollTo({ top: 0, behavior: "instant" });
 }
 function inspectorImpact(p) {
-  const count = reach(report, p.id, state).ids.length;
-  impact(
-    `${p.ref} · ${count} ${state.transitive ? "transitively reachable" : "connected"} ${count === 1 ? "part" : "parts"}`,
-    `Pad geometry, connectivity and footprint properties, compared across base and head. White pads are unchanged; red and green pads changed. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
-  );
+  const result = reach(report, p.id, state),
+    count = result.ids.length;
+  const details = $("diff-panel").querySelector(".reach-details");
+  details.querySelector("summary").textContent = `${count} ${state.transitive ? "transitively reachable" : "shared-net"} ${count === 1 ? "neighbor" : "neighbors"} · view parts by net`;
+  if (!details.open) return;
+  const content = details.querySelector(".reach-parts");
+  content.replaceChildren(el(
+    "p",
+    `References can appear on more than one net. Base and head connections are included. ${state.transitive ? "Structural reach, not signal propagation." : ""}`,
+    "reach-help",
+  ));
+  for (const group of netReachGroups(report, p, result, state.transitive)) {
+    if (!group.ids.length) continue;
+    const section = el("section", undefined, "reach-net");
+    section.dataset.net = group.name;
+    const heading = el("h3");
+    heading.append(
+      netLabel(group.name),
+      document.createTextNode(` · ${group.ids.length} ${group.ids.length === 1 ? "part" : "parts"}`),
+    );
+    section.append(heading);
+    const members = el("div", undefined, "reach-members");
+    for (const id of group.ids) {
+      const peer = parts.get(id);
+      const button = el("button", undefined, `reach-part ${peer.status}`);
+      button.dataset.id = id;
+      button.dataset.focusKey = JSON.stringify([group.name, id]);
+      button.append(el("strong", peer.ref), el("span", peer.value));
+      button.title = `${peer.ref} · ${peer.value} · ${displaySheet(peer)} · ${peer.status}`;
+      button.setAttribute("aria-label", `Inspect ${peer.ref}, ${peer.value}, ${peer.status}`);
+      button.onclick = () => {
+        state.query = "";
+        $("search").value = "";
+        if (!inScope(peer)) {
+          state.scope = { file: peer.file, sheet: displaySheet(peer) };
+          breadcrumb();
+        }
+        openDiff(peer, { region: "map", key: `part:${id}`, scrollY: 0 });
+      };
+      members.append(button);
+    }
+    section.append(members);
+    content.append(section);
+  }
+  if (!result.ids.length) content.append(el("p", "No other parts share the included nets."));
+  syncRoving(content, "connections");
 }
 function closeDiff() {
   state.selected = null;
@@ -1202,8 +1303,10 @@ async function init() {
         $(id === "map-tab" ? "board-tab" : "map-tab").classList.remove(
           "active",
         );
-        if (state.selected) closeDiff();
-        renderMap();
+        if (state.selected) {
+          closeDiff();
+          $(id).focus({ preventScroll: true });
+        } else renderMap();
         resetImpact();
       };
     wireRoving($("part-list"), "list");

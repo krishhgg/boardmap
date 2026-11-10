@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { reach } from "../src/compare.js";
-import { rankedNetReach } from "../web/review.js";
+import { rankedNetReach, netReachGroups } from "../web/review.js";
 const net = (name, before, after = before, file = "board") => ({ name, before, after, file });
 const owner = { id: "A", file: "board" };
 test("per-net counts include peers already reached through another net", () => {
@@ -14,6 +14,9 @@ test("per-net counts include peers already reached through another net", () => {
   assert.deepEqual(rankedNetReach(report, owner, result), [
     { name: "3V3", count: 3 }, { name: "SIGNAL", count: 1 },
   ]);
+  assert.deepEqual(netReachGroups(report, owner, result), [
+    { name: "3V3", ids: ["B", "C", "D"] }, { name: "SIGNAL", ids: ["B"] },
+  ], "a peer appears in every net it shares, not just its first BFS edge");
 });
 test("a historical source cannot acquire new loads from a later revision", () => {
   const report = { nets: { power: net("3V3", ["A", "B"], ["C", "D"]) } };

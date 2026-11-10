@@ -17,6 +17,7 @@ const { values } = parseArgs({
     fixture: { type: "boolean" },
     removed: { type: "boolean" },
     navigation: { type: "boolean" },
+    detail: { type: "boolean" },
   },
 });
 const fixture = values.fixture
@@ -45,8 +46,14 @@ const selectedCaptures = new Set(
     ? ["map", "header-1024", "keyboard-focus", "u17-inspector"]
     : ["touch-reach", "touch-diff"],
 );
+const detailCaptures = new Set([
+  "map", "reach", "reached-parts", "laptop-inspector",
+  "classification", "touch-sheet",
+]);
 const shouldCapture = (name) =>
-  out && (!values.navigation || selectedCaptures.has(name));
+  out && (values.detail
+    ? detailCaptures.has(name)
+    : !values.navigation || selectedCaptures.has(name));
 const capture = async (name) => {
   if (shouldCapture(name))
     await page.screenshot({
@@ -314,6 +321,18 @@ try {
     "map dominates 1280×800",
   );
   await capture("compact");
+  if (report.head === "eaf6e072fe273c2cfd64690de135ddb7ffe870f9" &&
+      report.boards.length === 1 &&
+      report.boards[0] === "pcbs/corne-cherry/hotswap/corne-cherry.kicad_pcb") {
+    for (const [width, height, refs] of [[1280, 800, ["R8", "R9"]], [1024, 720, ["J2"]]]) {
+      await page.setViewportSize({ width, height });
+      for (const ref of refs) {
+        const part = report.parts.find((p) => p.ref === ref);
+        const label = page.locator(`.tile[data-id=${JSON.stringify(part.id)}] .ref`);
+        assert.equal(await label.innerText(), ref, `${ref} remains named at ${width}px`);
+      }
+    }
+  }
   await page.setViewportSize({ width: 1440, height: 900 });
   // Pick a large, connected part so screenshots and assertions cover real geometry.
   const candidate = (
@@ -459,14 +478,29 @@ try {
       includeGround,
     }).ids.length;
     assert.match(
-      await page.locator("#impact strong").innerText(),
+      await page.locator(".reach-details > summary").innerText(),
       new RegExp(
-        `${count} ${transitive ? "transitively reachable" : "connected"} ${count === 1 ? "part" : "parts"}`,
+        `${count} ${transitive ? "transitively reachable" : "shared-net"} neighbor`,
       ),
       "inspector reach readout follows both controls",
     );
   }
   assert.equal(await page.locator(".region svg").count(), 2);
+  await page.locator(".reach-details > summary").click();
+  await page.locator(".reach-part").first().waitFor();
+  const reachedIds = await page.locator(".reach-part").evaluateAll((nodes) =>
+    [...new Set(nodes.map((node) => node.dataset.id))].sort(),
+  );
+  assert.deepEqual(reachedIds, reach(report, candidate.id).ids.sort(),
+    "the inspector names every reached part, including loads outside the current view");
+  assert.equal(await page.locator('.reach-part[tabindex="0"]').count(), 1);
+  await capture("reached-parts");
+  const reached = page.locator(".reach-part").first();
+  const reachedId = await reached.getAttribute("data-id");
+  await reached.press("Enter");
+  assert.equal(await page.locator("#diff-panel").getAttribute("data-id"), reachedId);
+  await page.keyboard.press("Escape");
+  await tile.click();
   assert.ok((await page.locator(".semantic tr").count()) > 1);
   if (values.fixture) {
     assert.ok(
@@ -652,9 +686,10 @@ try {
       const first = await page.locator(".semantic tr").nth(1).boundingBox();
       assert.ok(first.y >= 0 && first.y + first.height <= viewport.height,
         "the first semantic change is visible on a laptop");
-      assert.equal((await page.locator("#impact").boundingBox()).height, 36);
+      assert.ok(!(await page.locator("#impact").isVisible()));
       assert.equal((await page.locator(".region svg").first().boundingBox()).height, 120);
       assert.equal(await page.locator('.region svg[data-revision="before"]').count(), 1);
+      if (viewport.width === 1024) await capture("laptop-inspector");
     }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.keyboard.press("Escape");
@@ -671,6 +706,28 @@ try {
       await page.keyboard.press("Escape");
     }
   }
+  if (report.head === "3bdc5547004c8244de5f37104410c363854e5634" &&
+      report.boards.includes("hardware/hackrf-one/hackrf-one.kicad_pcb")) {
+    for (const ref of ["P69", "C159"]) {
+      const p = report.parts.find((part) => part.ref === ref);
+      await page.locator(`.part-row[data-id=${JSON.stringify(p.id)}]`).press("Enter");
+      if (ref === "P69") {
+        assert.equal(await page.locator(".priority-tag").innerText(), "Metadata");
+        assert.match(await page.locator(".classification-note").innerText(), /Verified legacy assembly-metadata migration/);
+        await capture("classification");
+      } else {
+        assert.match(await page.locator(".diff-summary").innerText(), /Population/);
+        assert.match(await page.locator(".diff-summary").innerText(), /Part identifier/);
+      }
+      await page.keyboard.press("Escape");
+    }
+  }
+  await page.locator(".group-title").first().click();
+  await page.mouse.move(1, 1);
+  await previewSettled(null);
+  assert.equal(await page.locator("#connections path").count(), 0,
+    "mouse drill-in does not keep an unrequested first-component reach");
+  await page.locator("#breadcrumbs button").first().click();
   await page.locator(".group-title").first().press("Enter");
   assert.ok(
     await page.evaluate(() =>
@@ -965,6 +1022,7 @@ try {
     const smallest = targets.sort((a, b) => a.side - b.side)[0];
     const small = touchPage.locator(`.tile[data-id=${JSON.stringify(smallest.id)}]`);
     await small.scrollIntoViewIfNeeded();
+    await touchCapture("touch-sheet");
     const box = await small.boundingBox(), x = box.x + box.width / 2, y = box.y + box.height / 2;
     await touchPage.touchscreen.tap(x, y);
     await touchPage.touchscreen.tap(x, y);

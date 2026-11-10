@@ -451,18 +451,7 @@ select {
   overscroll-behavior: contain;
 }
 main:has(#diff-panel:not([hidden])) > #impact {
-  height: 36px;
-  padding: 6px 12px;
-  margin-bottom: 8px;
-  align-items: center;
-}
-main:has(#diff-panel:not([hidden])) > #impact p,
-main:has(#diff-panel:not([hidden])) > #impact .net-reach-list {
   display: none;
-}
-main:has(#diff-panel:not([hidden])) > #impact .impact-dot {
-  height: 16px;
-  margin-top: 0;
 }
 .impact-dot {
   width: 4px;
@@ -657,6 +646,7 @@ main:has(#diff-panel:not([hidden])) > #impact .impact-dot {
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
+  line-height: 1.4;
 }
 .tile .value {
   display: block;
@@ -807,6 +797,85 @@ footer {
   margin: 0;
   font-family: var(--mono);
   overflow-wrap: anywhere;
+}
+.priority-tag {
+  display: inline-block;
+  padding: 3px 6px;
+  margin-left: 10px;
+  font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.priority-tag.electrical {
+  color: var(--orange);
+}
+.classification-note,
+.reach-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.classification-note a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reach-details {
+  margin: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.reach-details > summary {
+  padding: 9px 0;
+  cursor: pointer;
+  color: var(--blue);
+  font-size: 12px;
+}
+.reach-net h3 {
+  margin: 14px 0 6px;
+  font: 12px var(--mono);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.reach-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.reach-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 8px;
+  min-height: 32px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 12px;
+}
+.reach-part strong {
+  font: 12px var(--mono);
+}
+.reach-part span {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: 11px;
+}
+.reach-part.removed strong {
+  text-decoration: line-through;
+  color: var(--red);
+}
+.reach-part.added strong {
+  color: var(--green);
+}
+.reach-part:focus-visible,
+.close-diff:focus-visible {
+  outline-offset: -2px;
 }
 .regions {
   display: grid;
