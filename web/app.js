@@ -164,9 +164,14 @@ function openDiff(p) {
   const close=el('button','← Back to map','close-diff');close.onclick=closeDiff;head.append(title,close);
   panel.append(head,el('p',`${p.file} · ${p.sheet} · ${p.value || p.footprint}`,'diff-subtitle'));
   const regions=el('div',undefined,'regions');
-  const extent=Math.max(8,...[p.before,p.after].filter(Boolean).flatMap(part=>part.pads.map(pad=>Math.max(Math.abs(pad.x)+pad.w,Math.abs(pad.y)+pad.h))))*1.25;
+  const extent=Math.max(8,...[p.before,p.after].filter(Boolean).flatMap(part=>part.pads.map(pad=>{
+    const pos=padPosition(part,pad),angle=pad.angle*Math.PI/180;
+    const rx=(Math.abs(pad.w*Math.cos(angle))+Math.abs(pad.h*Math.sin(angle)))/2;
+    const ry=(Math.abs(pad.w*Math.sin(angle))+Math.abs(pad.h*Math.cos(angle)))/2;
+    return Math.max(Math.abs(pos.x)+rx,Math.abs(pos.y)+ry);
+  })))*1.25;
   for (const key of ['before','after']) {
-    const figure=el('figure',undefined,'region'); figure.append(el('figcaption',`${key==='before'?'BASE':'HEAD'} · local pad region · ${extent.toFixed(1)} mm radius`));
+    const figure=el('figure',undefined,'region'); figure.append(el('figcaption',`${key==='before'?'BASE':'HEAD'} · local pad region · ${extent.toFixed(1)} mm radius · custom shapes approximate`));
     figure.append(regionSvg(p,key,extent));regions.append(figure);
   }
   panel.append(regions);
@@ -189,7 +194,11 @@ function openDiff(p) {
   panel.append(table); impact(`${p.ref} · ${reach(report,p.id,state).ids.length} connected parts`, 'The diff compares footprint properties and numbered pad connectivity. Local regions show pads and nearby footprints. Copper tracks, zones and DRC/ERC are outside this review.');
   close.focus();
 }
-function closeDiff() {const id=state.selected;state.selected=null;$('diff-panel').hidden=true;$('map-panel').hidden=false;renderMap();resetImpact();const row=[...$('part-list').children].find(n=>n.dataset.id===id);row?.focus();}
+function closeDiff() {const id=state.selected;state.selected=null;$('diff-panel').hidden=true;$('map-panel').hidden=false;renderMap();resetImpact();const target=[...$('tiles').querySelectorAll('.tile'),...$('part-list').children].find(n=>n.dataset.id===id);(target ?? $('map-tab')).focus();}
+function padPosition(part,pad) {
+  const angle=part.angle*Math.PI/180;
+  return {x:pad.x*Math.cos(angle)+pad.y*Math.sin(angle),y:-pad.x*Math.sin(angle)+pad.y*Math.cos(angle)};
+}
 function regionSvg(selected,key,extent) {
   const svg=svgEl('svg',{viewBox:`${-extent} ${-extent} ${extent*2} ${extent*2}`,role:'img','aria-label':`${key} pad region for ${selected.ref}`});
   const anchor=selected[key];
@@ -198,11 +207,17 @@ function regionSvg(selected,key,extent) {
     const part=p[key]; if (!part || part.file!==anchor.file) continue;
     const dx=part.x-anchor.x,dy=part.y-anchor.y;
     if (Math.abs(dx)>extent*2 || Math.abs(dy)>extent*2) continue;
-    const angle=part.angle*Math.PI/180;
     for (const pad of part.pads) {
-      const x=dx+pad.x*Math.cos(angle)+pad.y*Math.sin(angle),y=dy-pad.x*Math.sin(angle)+pad.y*Math.cos(angle);
+      const pos=padPosition(part,pad),x=dx+pos.x,y=dy+pos.y;
       const color=p.id===selected.id?(key==='before'?'#e98496':'#6fdbb0'):'#3d5666';
-      const rect=svgEl('rect',{x:x-pad.w/2,y:y-pad.h/2,width:pad.w,height:pad.h,rx:pad.shape==='circle'?Math.min(pad.w,pad.h)/2:.12,fill:color,opacity:p.id===selected.id?.9:.4,transform:`rotate(${-pad.angle} ${x} ${y})`});svg.append(rect);
+      const rect=svgEl('rect',{x:x-pad.w/2,y:y-pad.h/2,width:pad.w,height:pad.h,rx:['circle','oval'].includes(pad.shape)?Math.min(pad.w,pad.h)/2:.12,fill:color,opacity:p.id===selected.id?.9:.4,transform:`rotate(${-pad.angle} ${x} ${y})`});svg.append(rect);
+      if (pad.drill?.length) {
+        const oval=pad.drill[0]==='oval',dw=Number(pad.drill[oval?1:0]),dh=oval?Number(pad.drill[2]):dw;
+        const offset=pad.drill.find(n=>Array.isArray(n) && n[0]==='offset') ?? [];
+        if (dw>0 && dh>0) {
+          const hole=svgEl('rect',{x:x-dw/2+Number(offset[1] ?? 0),y:y-dh/2+Number(offset[2] ?? 0),width:dw,height:dh,rx:Math.min(dw,dh)/2,fill:'#0e171e',stroke:color,'stroke-width':.08,transform:`rotate(${-pad.angle} ${x} ${y})`,'data-drill':pad.number});svg.append(hole);
+        }
+      }
       if (p.id===selected.id && pad.number) {const text=svgEl('text',{x,y:y+.17,'text-anchor':'middle',fill:'#0d171e','font-size':Math.min(.65,pad.h*.65)});text.textContent=pad.number;svg.append(text);}
     }
     if (p.id!==selected.id) {const label=svgEl('text',{x:dx,y:dy-1,fill:'#7c929f','font-size':extent/24,'text-anchor':'middle'});label.textContent=p.ref;svg.append(label);}
