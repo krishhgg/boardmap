@@ -2,6 +2,12 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 const assets = new Map([
   ["/", ["../web/index.html", "text/html; charset=utf-8"]],
+  ["/icon.svg", ["../assets/icon.svg", "image/svg+xml"]],
+  [
+    "/mono.woff2",
+    ["../assets/fonts/JetBrainsMono-Regular.woff2", "font/woff2"],
+  ],
+  ["/review.js", ["../web/review.js", "text/javascript; charset=utf-8"]],
   ["/app.js", ["../web/app.js", "text/javascript; charset=utf-8"]],
   ["/style.css", ["../web/style.css", "text/css; charset=utf-8"]],
   ["/compare.js", ["./compare.js", "text/javascript; charset=utf-8"]],

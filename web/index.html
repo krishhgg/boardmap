@@ -4,60 +4,59 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>boardmap · electrical change review</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header>
       <a class="brand" href="/" aria-label="boardmap home"
-        ><span class="brand-mark">⌘</span> boardmap<span class="edition"
-          >LOCAL REVIEW</span
-        ></a
+        ><img src="/icon.svg" alt="" width="28" height="28" />boardmap</a
       >
-      <div id="revision" class="mono"></div>
-      <span class="offline">● Offline · read only</span>
-    </header>
-    <section class="overview">
-      <div>
-        <div class="eyebrow">THE ELECTRICAL CHANGE MAP</div>
-        <h1>What does this change touch?</h1>
-        <p id="project">Loading board data…</p>
+      <div class="review-source">
+        <div id="project">Loading board data…</div>
+        <div id="revision" class="mono"></div>
       </div>
       <div id="stats" aria-label="Design statistics"></div>
-    </section>
+      <span class="offline">Offline<br />Read only</span>
+    </header>
     <div class="workspace">
       <aside>
         <div class="aside-heading">
           <h2>Changes <span id="change-count"></span></h2>
-          <span class="mono">base → head</span>
+          <span class="mono">base → head</span
+          ><button
+            id="toggle-changes"
+            aria-expanded="false"
+            aria-controls="change-controls"
+          >
+            Show changes
+          </button>
         </div>
-        <label class="search-label" for="search">Find a component or net</label
-        ><input
-          id="search"
-          type="search"
-          placeholder="Reference, value, net…"
-          autocomplete="off"
-        />
-        <div class="filters">
-          <label
-            ><input id="only-changed" type="checkbox" checked /> Changed
-            only</label
-          ><span id="list-count"></span>
+        <div id="change-controls">
+          <label class="search-label" for="search"
+            >Find a component or net</label
+          >
+          <input
+            id="search"
+            type="search"
+            placeholder="Reference, value, net…"
+            autocomplete="off"
+          />
+          <div class="filters">
+            <label
+              ><input id="only-changed" type="checkbox" checked /> Changed
+              only</label
+            ><span id="list-count"></span>
+          </div>
+          <div id="part-list" aria-label="Components"></div>
         </div>
-        <div id="part-list" aria-label="Components"></div>
         <div class="aside-foot">
-          Hover to trace shared nets.<br />Click a component to inspect its
-          diff.
+          Focus or hover to trace shared nets.<br />Select a component to
+          inspect its diff.
         </div>
       </aside>
       <main>
         <div class="toolbar">
-          <nav id="breadcrumbs" aria-label="Sheet navigation"></nav>
-          <div class="view-tabs" aria-label="View">
-            <button id="map-tab" class="active">Design map</button
-            ><button id="board-tab">Board layout</button>
-          </div>
-        </div>
-        <div id="map-panel">
           <div class="map-settings">
             <label
               >Reach
@@ -65,35 +64,37 @@
                 <option value="direct">Direct neighbors</option>
                 <option value="transitive">Transitive connectivity</option>
               </select></label
-            ><label><input id="ground" type="checkbox" /> Include ground</label
-            ><span id="scope-count"></span>
+            ><label><input id="ground" type="checkbox" /> Include ground</label>
           </div>
+          <div class="view-tabs" role="group" aria-label="View">
+            <button id="map-tab" class="active" aria-pressed="true">
+              Design map</button
+            ><button id="board-tab" aria-pressed="false">Board layout</button>
+          </div>
+        </div>
+        <div class="location-bar">
+          <nav id="breadcrumbs" aria-label="Sheet navigation"></nav>
+          <span id="scope-count"></span>
+        </div>
+        <div id="impact" aria-live="polite"></div>
+        <div id="map-panel">
           <div id="canvas">
             <div id="tiles"></div>
             <svg id="connections" aria-hidden="true"></svg>
             <div id="map-empty" hidden>No components match this search.</div>
           </div>
           <div class="legend">
-            <span><i class="modified"></i>Modified</span
+            <span><i class="electrical"></i>Electrical</span
+            ><span><i class="modified"></i>Metadata</span
             ><span><i class="added"></i>Added</span
             ><span><i class="removed"></i>Removed</span
             ><span><i class="unchanged"></i>Unchanged</span
             ><span class="legend-note"
-              >Area = numbered pads · groups = board / sheet</span
+              >Area = numbered pads · grouped by board / sheet</span
             >
           </div>
         </div>
         <section id="diff-panel" hidden aria-label="Component diff"></section>
-        <div id="impact" aria-live="polite">
-          <span class="impact-dot"></span>
-          <div>
-            <strong>Follow the electrical impact</strong>
-            <p>
-              Hover or focus a part to see everything sharing its nets, across
-              both revisions. Ground is excluded by default.
-            </p>
-          </div>
-        </div>
       </main>
     </div>
     <footer>
