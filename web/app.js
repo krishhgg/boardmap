@@ -46,8 +46,10 @@ const mark = (p) =>
 // Native buttons form two linear roving groups, with one Tab stop per region.
 function syncRoving(root, region) {
   const buttons = [...root.querySelectorAll("button")];
-  const current = buttons.find((button) =>
-    button.dataset.focusKey === state.roving[region]) ?? buttons[0];
+  const current =
+    buttons.find(
+      (button) => button.dataset.focusKey === state.roving[region],
+    ) ?? buttons[0];
   for (const button of buttons) button.tabIndex = button === current ? 0 : -1;
   state.roving[region] = current?.dataset.focusKey ?? null;
 }
@@ -59,31 +61,50 @@ function wireRoving(root, region) {
     syncRoving(root, region);
   });
   root.addEventListener("keydown", (event) => {
-    const keys = region === "map"
-      ? ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"]
-      : ["ArrowUp", "ArrowDown", "Home", "End"];
-    if (!keys.includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
+    const keys =
+      region === "map"
+        ? ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"]
+        : ["ArrowUp", "ArrowDown", "Home", "End"];
+    if (
+      !keys.includes(event.key) ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey
+    )
+      return;
     const buttons = [...root.querySelectorAll("button")];
     const index = buttons.indexOf(document.activeElement);
     if (index < 0) return;
     event.preventDefault();
-    const next = event.key === "Home" ? 0
-      : event.key === "End" ? buttons.length - 1
-      : Math.max(0, Math.min(buttons.length - 1,
-          index + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1)));
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? buttons.length - 1
+          : Math.max(
+              0,
+              Math.min(
+                buttons.length - 1,
+                index + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1),
+              ),
+            );
     buttons[next].focus();
   });
-  if (region === "list") root.addEventListener("pointerleave", (event) => {
-    if (event.pointerType !== "touch" && !state.touchPreview) {
-      const focused = document.activeElement;
-      if (root.contains(focused) && focused.dataset.id) highlight(focused.dataset.id);
-      else resetImpact();
-    }
-  });
+  if (region === "list")
+    root.addEventListener("pointerleave", (event) => {
+      if (event.pointerType !== "touch" && !state.touchPreview) {
+        const focused = document.activeElement;
+        if (root.contains(focused) && focused.dataset.id)
+          highlight(focused.dataset.id);
+        else resetImpact();
+      }
+    });
 }
 function partOrigin(node) {
-  return { region: $("part-list").contains(node) ? "list" : "map",
-    key: node.dataset.focusKey };
+  return {
+    region: $("part-list").contains(node) ? "list" : "map",
+    key: node.dataset.focusKey,
+  };
 }
 function matches(p) {
   return `${p.ref} ${p.value} ${p.footprint} ${Object.values(
@@ -99,16 +120,31 @@ function matches(p) {
 function displaySheet(p) {
   if (p.status !== "removed" || !p.path) return p.sheet;
   const path = p.path.split("/").slice(0, -1).join("/");
-  const labels = new Set((report.sheetRenames ?? [])
-    .filter((rename) => rename.file === p.file && rename.path === path &&
-      rename.before === p.sheet).map((rename) => rename.after));
+  const labels = new Set(
+    (report.sheetRenames ?? [])
+      .filter(
+        (rename) =>
+          rename.file === p.file &&
+          rename.path === path &&
+          rename.before === p.sheet,
+      )
+      .map((rename) => rename.after),
+  );
   return labels.size === 1 ? [...labels][0] : p.sheet;
 }
 function changeFields(p) {
-  return orderedChanges(p).map((c) => propertyPriority(c) ?? {
-    pins: "pin nets", pads: "pad geometry", fields: "properties",
-    attributes: "assembly", angle: "rotation",
-  }[c.field] ?? c.field);
+  return orderedChanges(p).map(
+    (c) =>
+      propertyPriority(c) ??
+      {
+        pins: "pin nets",
+        pads: "pad geometry",
+        fields: "properties",
+        attributes: "assembly",
+        angle: "rotation",
+      }[c.field] ??
+      c.field,
+  );
 }
 function inScope(p) {
   return (
@@ -219,7 +255,10 @@ function renderList() {
     const meta = el("span", undefined, "part-meta");
     meta.append(
       el("strong", p.ref),
-      el("small", `${p.value || p.footprint}${report.boards.length > 1 ? ` · ${shortFile(p.file)}` : ""}`),
+      el(
+        "small",
+        `${p.value || p.footprint}${report.boards.length > 1 ? ` · ${shortFile(p.file)}` : ""}`,
+      ),
     );
     if (p.status === "modified") {
       const fields = changeFields(p);
@@ -379,9 +418,10 @@ function renderMap() {
   syncRoving($("tiles"), "map");
 }
 function buildMap() {
-  $("map-scale-note").textContent = state.view === "board"
-    ? "Footprint centers · size is schematic"
-    : "Area weighted by numbered pads, minimum 3 · grouped by board / sheet";
+  $("map-scale-note").textContent =
+    state.view === "board"
+      ? "Footprint centers · size is schematic"
+      : "Area weighted by numbered pads, minimum 3 · grouped by board / sheet";
   const root = $("tiles");
   root.replaceChildren();
   $("connections").replaceChildren();
@@ -639,12 +679,19 @@ function format(value) {
 }
 function assembly(value) {
   if (!Array.isArray(value)) return format(value);
-  const labels = { smd: "SMD", through_hole: "Through-hole",
-    exclude_from_bom: "Not in BOM", exclude_from_pos_files: "Not in position file",
-    dnp: "DNP", board_only: "Board only",
+  const labels = {
+    smd: "SMD",
+    through_hole: "Through-hole",
+    exclude_from_bom: "Not in BOM",
+    exclude_from_pos_files: "Not in position file",
+    dnp: "DNP",
+    board_only: "Board only",
     allow_missing_courtyard: "Allow missing courtyard",
-    allow_soldermask_bridges: "Allow solder mask bridges" };
-  return value.length ? value.map((flag) => labels[flag] ?? flag).join(", ") : "None";
+    allow_soldermask_bridges: "Allow solder mask bridges",
+  };
+  return value.length
+    ? value.map((flag) => labels[flag] ?? flag).join(", ")
+    : "None";
 }
 function setChangesExpanded(expanded) {
   $("toggle-changes").setAttribute("aria-expanded", expanded);
@@ -713,8 +760,10 @@ function openDiff(p, origin) {
   const context = el("dl", undefined, "swap-context");
   for (const c of orderedChanges(p)) {
     if (!["value", "footprint"].includes(c.field)) continue;
-    context.append(el("dt", c.field === "value" ? "Value" : "Footprint"),
-      el("dd", `${format(c.before)} → ${format(c.after)}`));
+    context.append(
+      el("dt", c.field === "value" ? "Value" : "Footprint"),
+      el("dd", `${format(c.before)} → ${format(c.after)}`),
+    );
   }
   if (context.children.length) panel.append(context);
   const regions = el("div", undefined, "regions");
@@ -842,7 +891,11 @@ function openDiff(p, origin) {
       );
     for (const key of ["value", "footprint", "sheet", "side"])
       row(key[0].toUpperCase() + key.slice(1), p.before?.[key], p.after?.[key]);
-    row("Assembly", assembly(p.before?.attributes), assembly(p.after?.attributes));
+    row(
+      "Assembly",
+      assembly(p.before?.attributes),
+      assembly(p.after?.attributes),
+    );
     for (const key of Object.keys((p.after ?? p.before).fields).sort())
       row(`Property: ${key}`, p.before?.fields[key], p.after?.fields[key]);
   }
@@ -881,9 +934,11 @@ function closeDiff() {
   resetImpact();
   const origin = state.inspectOrigin;
   const mobile = matchMedia("(max-width: 700px)").matches;
-  const root = origin?.region === "list" && !mobile ? $("part-list") : $("tiles");
-  const target = [...root.querySelectorAll("button")]
-    .find((n) => n.dataset.focusKey === origin?.key);
+  const root =
+    origin?.region === "list" && !mobile ? $("part-list") : $("tiles");
+  const target = [...root.querySelectorAll("button")].find(
+    (n) => n.dataset.focusKey === origin?.key,
+  );
   (target ?? $("map-tab")).focus({ preventScroll: mobile });
   if (mobile) $("canvas").scrollIntoView({ block: "nearest" });
 }
@@ -1146,8 +1201,12 @@ async function init() {
     wireRoving($("tiles"), "map");
     // Reset only after leaving the canvas, not when crossing tile gutters.
     $("canvas").addEventListener("pointerleave", (event) => {
-      if (event.pointerType !== "touch" && !state.touchPreview &&
-          !$("tiles").contains(document.activeElement)) resetImpact();
+      if (event.pointerType !== "touch" && !state.touchPreview) {
+        const focused = document.activeElement;
+        if ($("tiles").contains(focused) && focused.dataset.id)
+          highlight(focused.dataset.id);
+        else resetImpact();
+      }
     });
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
@@ -1155,8 +1214,12 @@ async function init() {
       else resetImpact();
     });
     document.addEventListener("pointerdown", (event) => {
-      if (event.pointerType === "touch" && state.touchPreview &&
-          !event.target.closest(".tile, .part-row, .open-preview")) resetImpact();
+      if (
+        event.pointerType === "touch" &&
+        state.touchPreview &&
+        !event.target.closest(".tile, .part-row, .open-preview")
+      )
+        resetImpact();
     });
     resize = new ResizeObserver(() => {
       const box = $("canvas").getBoundingClientRect(),
