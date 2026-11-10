@@ -135,7 +135,7 @@ function displaySheet(p) {
 function changeFields(p) {
   return orderedChanges(p).map(
     (c) =>
-      propertyPriority(c) ??
+      propertyPriority(c, p) ??
       {
         pins: "pin nets",
         pads: "pad geometry",
@@ -734,9 +734,9 @@ function openDiff(p, origin) {
             .filter((c) => c.field !== "pins")
             .map(
               (c) =>
-                (propertyPriority(c)
-                  ? propertyPriority(c)[0].toUpperCase() +
-                    propertyPriority(c).slice(1)
+                (propertyPriority(c, p)
+                  ? propertyPriority(c, p)[0].toUpperCase() +
+                    propertyPriority(c, p).slice(1)
                   : null) ??
                 {
                   attributes: "Assembly",
