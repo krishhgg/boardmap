@@ -1056,6 +1056,11 @@ footer {
     flex: none;
     min-height: 320px;
   }
+  main:has(#diff-panel:not([hidden])) > .toolbar,
+  main:has(#diff-panel:not([hidden])) > .location-bar,
+  main:has(#diff-panel:not([hidden])) > #impact {
+    display: none;
+  }
   .regions {
     gap: 8px;
   }

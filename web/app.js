@@ -420,7 +420,7 @@ function renderMap() {
 function buildMap() {
   $("map-scale-note").textContent =
     state.view === "board"
-      ? "Footprint centers · size is schematic"
+      ? "Footprint centers · markers not to scale"
       : "Area weighted by numbered pads, minimum 3 · grouped by board / sheet";
   const root = $("tiles");
   root.replaceChildren();

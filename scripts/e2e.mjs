@@ -762,6 +762,15 @@ try {
     await touchPage.locator("#diff-panel").isVisible(),
     "explicit action opens diff",
   );
+  assert.ok(
+    !(await touchPage.locator("#impact").isVisible()),
+    "phone inspection gives the screen to the component rather than map controls",
+  );
+  const firstPin = await touchPage.locator(".semantic tr").nth(1).boundingBox();
+  assert.ok(
+    firstPin.y >= 0 && firstPin.y + firstPin.height <= 844,
+    "first semantic change fits on the initial phone screen",
+  );
   await touchCapture("touch-diff");
   assert.ok(
     await touchPage.evaluate(
