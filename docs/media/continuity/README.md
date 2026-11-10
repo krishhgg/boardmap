@@ -11,6 +11,8 @@ These are actual Chromium captures of the pinned HackRF and Corne comparisons. N
 | `hackrf/touch-return.png`, `corne/touch-return.png` | 390 × 844 | Touch Back restores the marked part, readout and original viewport position. |
 | `hackrf/touch-root.png`, `corne/touch-root.png` | 390 × 844 | Long root-sheet references fit without reducing type below 9px. |
 | `corne/board-neighbor-return.png` | 1440 × 1000 | Both populated boards loaded unchanged. Following a neighbor chooses its board, and Back visibly marks that neighbor. |
+| `corne/board-list-return.png`, `corne/touch-board-list-return.png` | 1440 × 900, 390 × 844 | Opening from the changes list before choosing a board returns to that part's board, with its exact reference marked and named. |
+| `hackrf/tablet-return.png`, `corne/tablet-return.png` | 720 × 900 | The return mark and readout survive the resize notification after the inspector closes. |
 
 ## Reproduce
 
@@ -53,6 +55,8 @@ The browser checks every valid reference in every drilled HackRF and Corne cherr
 The slow-pointer reproduction originally lost U23 on five of nine accelerated paths to the remaining-net list at 1024 × 720. After the fix, all nine preserve U23. The committed browser regression uses a 1.3-second path, waits in the map/readout gap, and then verifies that resting on U24 retargets. Moving more than four pixels restarts the intent timer; the gap belongs to the same instrument area. Keyboard and touch remain immediate.
 
 A second reproduction exposed a layout-generated pointer entry after Back. With the mouse resting over the inspector, Escape restored U21 briefly and then traced U4 without any pointer movement. Touch Back with a parked mouse reproduced the same failure. The fixed reproduction keeps U21 and C1 marked after 500ms. Pointer entry alone no longer changes the source; real mouse movement still starts the ordinary hover and settle behavior. Browser regressions cover both Escape and mixed mouse/touch Back after the 160ms intent delay.
+
+Further return checks cover mouse input at 701, 720, 768 and 900px widths and touch at 768 × 1024. The selected trace is saved across the resize redraw. In the unchanged two-board Corne report, opening from the list before choosing a board now selects the originating board on Back. Both mouse and physical touch checks require its tile and readout after 500ms. The pre-fix phone reproductions lost both marks; the same reproductions now preserve them.
 
 An offline install of the packed tarball starts the real CLI, loads 469 HackRF components, and opens the 136-component sheet with every reference present. Every observed browser request stays on loopback. The package contains 18 files, no bundled runtime dependencies, and no screenshots or fixtures.
 
