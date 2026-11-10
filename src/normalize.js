@@ -13,10 +13,10 @@ export function sheetRenames(before,after) {
   }
   // Include unchanged labels so a rename can't rewrite another sheet with that label.
   for (const [id,a] of before) {
-    const b=after.get(id);if(!b || !sameSheet(a,b)) continue;
+    const b=after.get(id);
     const key=`${a.file}::${prefix(a.sheet)}`;
     if(!candidates.has(key)) candidates.set(key,new Set());
-    candidates.get(key).add(prefix(b.sheet));
+    candidates.get(key).add(prefix(b && sameSheet(a,b)?b.sheet:a.sheet));
   }
   const rules=[];
   for(const [key,targets] of candidates) {

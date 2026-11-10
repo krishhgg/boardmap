@@ -170,3 +170,11 @@ test('sheet prefix renames never merge distinct historical nets',()=> {
   assert.deepEqual(report.nets['main.kicad_pcb::/B/X'].before,['main.kicad_pcb::R2']);
   assert.ok(report.parts[0].changes.some(c=>c.field==='pins'));
 });
+test('unmatched and removed sheet labels still guard narrower prefixes',()=> {
+  const a=read(board(fp('R1','/Power/VIN'),fp('R2','/Power/Monitor/SENSE'))),b=structuredClone(a);
+  for(const [i,sheet] of ['Power','Power/Monitor'].entries()) {a[i].sheet=sheet;b[i].sheet=sheet;a[i].path=`/sheet${i}/part${i}`;b[i].path=a[i].path;}
+  b[0].sheet='Supply';b[0].pins['1']=['/Supply/VIN'];b[1].path='/replacement-sheet/part1';b[1].pins['1']=['/Supply/Monitor/SENSE'];
+  assert.equal(compare(a,b).stats.changed,1);
+  const report=compare(a,b.slice(0,1));
+  assert.ok(report.nets['main.kicad_pcb::/Power/Monitor/SENSE']);
+});
