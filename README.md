@@ -54,7 +54,7 @@ Each command fetches two pinned commits into a per-user cache, without a checkou
 
 | Source PR | Comparison | Head parts | Changed | Unchanged affected |
 | --- | --- | ---: | ---: | ---: |
-| [HackRF #1411, HackRF One r10](https://github.com/greatscottgadgets/hackrf/pull/1411) | `f6598e7b..3bdc5547`, changed board | 437 | 392 | 59 |
+| [HackRF #1411, HackRF One r10](https://github.com/greatscottgadgets/hackrf/pull/1411) | `f6598e7b..3bdc5547`, changed board | 437 | 390 | 61 |
 | [Corne #237, v4.1.0](https://github.com/foostan/crkbd/pull/237) | `a935f345..eaf6e072`, cherry board | 180 | 18 | 102 |
 
 The Corne PR changes both cherry and chocolate boards. Without `--board`, its report includes 360 head parts and 30 changed parts. The demo script selects cherry for a smaller review. See [all captures](docs/media), including HackRF and mobile layouts. Captures are actual Chromium runs, not mockups.

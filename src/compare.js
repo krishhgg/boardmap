@@ -151,39 +151,37 @@ export function reach(
   id,
   { transitive = false, includeGround = false } = {},
 ) {
-  const links = new Map(),
-    byPart = new Map();
-  for (const [key, net] of Object.entries(report.nets)) {
+  const byPart = new Map();
+  for (const net of Object.values(report.nets)) {
     if (!includeGround && net.ground) continue;
-    const members = [...new Set([...net.before, ...net.after])];
-    links.set(key, members);
-    for (const member of members) {
-      if (!byPart.has(member)) byPart.set(member, []);
-      byPart.get(member).push(key);
+    for (const members of [net.before, net.after]) {
+      const link = { name: net.name, members };
+      for (const member of members) {
+        if (!byPart.has(member)) byPart.set(member, []);
+        byPart.get(member).push(link);
+      }
     }
   }
   const seen = new Set([id]),
     queue = [id],
     edges = [],
-    usedNets = new Set();
+    usedLinks = new Set(),
+    netNames = new Set();
   for (let i = 0; i < queue.length; i++) {
     const source = queue[i];
-    for (const key of byPart.get(source) ?? []) {
-      if (usedNets.has(key)) continue;
-      usedNets.add(key);
-      for (const target of links.get(key)) {
+    for (const link of byPart.get(source) ?? []) {
+      if (usedLinks.has(link)) continue;
+      usedLinks.add(link);
+      netNames.add(link.name);
+      for (const target of link.members) {
         if (seen.has(target)) continue;
         seen.add(target);
-        edges.push({ source, target, net: report.nets[key].name });
+        edges.push({ source, target, net: link.name });
         if (transitive) queue.push(target);
       }
     }
     if (!transitive) break;
   }
   seen.delete(id);
-  return {
-    ids: [...seen],
-    edges,
-    nets: [...usedNets].map((k) => report.nets[k].name),
-  };
+  return { ids: [...seen], edges, nets: [...netNames] };
 }

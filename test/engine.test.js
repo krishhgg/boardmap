@@ -378,3 +378,17 @@ test("a removed sheetmate reuses the rename proved by its surviving sheet UUID",
   assert.equal(report.parts.find((p) => p.ref === "R1").status, "unchanged");
   assert.equal(report.parts.find((p) => p.ref === "R2").status, "removed");
 });
+
+test("direct reach never invents neighbors from different revisions", () => {
+  const a = read(board(fp("R1", "A"), fp("R2", "B"), fp("C1", "A")));
+  const b = read(board(fp("R1", "B"), fp("R3", "A"), fp("C1", "A")));
+  const report = compare(a, b);
+  assert.deepEqual(reach(report, "main.kicad_pcb::R1").ids, [
+    "main.kicad_pcb::C1",
+  ]);
+  assert.deepEqual(reach(report, "main.kicad_pcb::R2").ids, []);
+  assert.deepEqual(
+    new Set(reach(report, "main.kicad_pcb::C1").ids),
+    new Set(["main.kicad_pcb::R1", "main.kicad_pcb::R3"]),
+  );
+});
