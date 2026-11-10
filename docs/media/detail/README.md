@@ -18,6 +18,7 @@ Actual Chromium captures from pinned HackRF and Corne git objects. The UI reads 
 | `corne/touch-sheet.png` | 390 × 844 | Scrolled sheet with readable references and larger touch targets. |
 | `corne/touch-sheet-preview.png` | 390 × 844 | The readout stays on screen without covering the original tap point. |
 | `corne/readout-1280.png`, `corne/readout-1024.png` | 1280 × 800, 1024 × 720 | Leading rail counts and the complete qualifier text stay outside the remaining-net scroller. |
+| `corne/board-neighbor-return.png` | 1440 × 900 | Both Corne boards loaded unchanged. Following a named neighbor from the sidebar chooses its board; Back returns to that part instead of the board chooser. |
 
 The refreshed eight-second hero and four frames are in `../instrument/`. Earlier capture directories record prior revisions and their original counts.
 
@@ -40,13 +41,18 @@ npm run test:e2e -- --repo "$CORNE_CACHE" \
   --board pcbs/corne-cherry/hotswap/corne-cherry.kicad_pcb \
   --out docs/media/detail/corne --detail
 node scripts/capture-demo.mjs "$CORNE_CACHE" --gif
+npm run test:e2e -- --repo "$CORNE_CACHE" \
+  --base eaf6e072fe273c2cfd64690de135ddb7ffe870f9 \
+  --head eaf6e072fe273c2cfd64690de135ddb7ffe870f9 \
+  --out /tmp/boardmap-return --detail
+cp /tmp/boardmap-return/board-neighbor-return.png docs/media/detail/corne/
 ```
 
 `--detail` limits captures to the states listed above. Each run closes its browser and ephemeral loopback server.
 
 ## Observed checks
 
-All 40 unit tests and five browser commands pass. Net-group tests cover shared peers appearing on multiple nets, historical source membership, transitive reach and board isolation. Browser assertions compare every named reference against `reach()`, follow a reached reference into its inspector, and verify one Tab stop for the reference group. Net counts are sorted without dropping power loads. Counts describe the union of the two revisions and may overlap between nets.
+All 41 unit tests and five browser commands pass. The additional real Corne HEAD/HEAD browser command also passes. Net-group tests cover shared peers appearing on multiple nets, historical source membership, transitive reach and board isolation. Browser assertions compare every named reference against `reach()`, follow a reached reference into its inspector, and verify one Tab stop for the reference group. Net counts are sorted without dropping power loads. Counts describe the union of the two revisions and may overlap between nets.
 
 The desktop readout reserves space for complete qualifiers. Only the remaining-net list scrolls, with its net count visible above it. The readout bounds are checked at 1440, 1280, 1024 and 720 pixels. Crossing an intervening tile briefly does not replace the source; resting on it for 160 milliseconds does. Phone readouts show the leading nets; the inspector retains every net and named load. A scrolled sheet keeps the readout sticky before and after the first tap, so its appearance does not move or cover the tapped component. The U21 regulator regression also checks long net names and its Open action.
 
@@ -55,6 +61,8 @@ Laptop checks cover the first semantic row at 1280 × 800 and 1024 × 720. Corne
 Phone checks measure every drilled target, send two taps at one unchanged physical coordinate, and verify Back returns the exact component to the visible viewport. Overview targets remain small; the changes list and scrolling sheet provide precise selection.
 
 The laptop SVG assertion reads both diagrams atomically after a resize. This avoids measuring a detached SVG while the resize handler replaces it, the timing failure observed in CI.
+
+A two-part sheet with weights 100 and 3 now checks successive heights until its targets fit, instead of jumping to a column-sized fallback. At width 374, it measures 1,366 pixels rather than 12,574, with both target dimensions at least 32 pixels. Multi-board browser cases also follow a named neighbor before choosing a board and assert that Back shows and focuses that exact part.
 
 The package dry run contains 18 files, excludes fixtures and media, and bundles no runtime dependencies. An offline tarball install produced the real HackRF report and served the HTML, application script, layout helper, review helper, font and icon successfully. FFprobe reports the refreshed GIF as 8.000 seconds.
 
