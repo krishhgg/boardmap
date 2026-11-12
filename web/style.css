@@ -788,8 +788,15 @@ main:has(#diff-panel:not([hidden])) > #impact {
   margin-top: 6px;
   line-height: 16px;
 }
+.net-reach-more .net-reach-list {
+  scroll-snap-type: y mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+/* Rows snap into place, so a scrolled list never shows half a net. */
 .net-reach-more .net-reach-list li {
   flex-shrink: 0;
+  scroll-snap-align: start;
 }
 .net-reach-list li.gained b,
 #impact p .gained {
@@ -799,10 +806,13 @@ main:has(#diff-panel:not([hidden])) > #impact {
 #impact p .lost {
   color: var(--red);
 }
+#impact p .drawn {
+  color: var(--faint);
+}
 .net-reach-list li b {
   font-weight: 500;
 }
-/* A rail whose loads are ringed without curves. */
+/* A rail whose loads are highlighted without curves. */
 .net-reach-list li.rail > span::after {
   content: " ◌";
   color: var(--faint);
@@ -1174,6 +1184,13 @@ main:has(#diff-panel:not([hidden])) > #impact {
   border-color: var(--blue);
   background: #23374a;
   color: #d5e8ff;
+}
+/* On a hub trace, a neighbor whose connection did not change keeps a tint and loses its ring. */
+.hub .tile.affected:not(.gained):not(.lost) {
+  box-shadow: none;
+}
+.hub .tile.unchanged.affected:not(.gained):not(.lost) {
+  border-color: #2f4a63;
 }
 /* A dark hairline keeps the ring legible on orange and green fills. */
 .tile.affected.gained {
@@ -1698,8 +1715,16 @@ footer {
     display: none;
   }
 }
-/* The three-count badge gives way before the sheet's name does. */
+/* A narrow sheet keeps its electrical edit count and drops the added and removed counts. */
 @container (max-width: 180px) {
+  .group-title .group-changes :is(.added, .removed) {
+    display: none;
+  }
+  .group-title .group-changes:not(:has(.electrical)) {
+    display: none;
+  }
+}
+@container (max-width: 120px) {
   .group-title .group-changes {
     display: none;
   }

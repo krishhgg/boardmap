@@ -335,8 +335,11 @@ export function changedLinks(
 export function spread(
   rects,
   // A board with hundreds of small changes gets fewer passes, which keeps a redraw quick.
-  { gap = 2, limit = 18, rounds = rects.length > 600 ? 24 : 120, bounds } = {},
+  { gap = 2, limit = 18, rounds = rects.length > 600 ? 24 : 120, bounds, fixed = [] } = {},
 ) {
+  // Fixed boxes push the others away and never move themselves.
+  const movable = rects.length;
+  rects = [...rects, ...fixed.map((r) => ({ ...r }))];
   const home = rects.map((r) => ({ x: r.x, y: r.y }));
   const order = rects.map((_, index) => index);
   for (let round = 0; round < rounds; round++) {
@@ -350,6 +353,7 @@ export function spread(
         const j = order[n],
           b = rects[j];
         if (b.x >= a.x + a.w + gap) break;
+        if (i >= movable && j >= movable) continue;
         const dx = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + gap,
           dy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + gap;
         if (dx <= 0.01 || dy <= 0.01) continue;
@@ -370,14 +374,17 @@ export function spread(
           Math.abs(ux) > 0.01 ? dx / Math.abs(ux) : Infinity,
           Math.abs(uy) > 0.01 ? dy / Math.abs(uy) : Infinity,
         );
-        a.x -= (ux * need) / 2;
-        a.y -= (uy * need) / 2;
-        b.x += (ux * need) / 2;
-        b.y += (uy * need) / 2;
+        // A fixed box yields nothing, so the other one covers the whole distance.
+        const aShare = i >= movable ? 0 : j >= movable ? 1 : 0.5;
+        a.x -= ux * need * aShare;
+        a.y -= uy * need * aShare;
+        b.x += ux * need * (1 - aShare);
+        b.y += uy * need * (1 - aShare);
       }
     }
     let shift = 0;
     rects.forEach((r, i) => {
+      if (i >= movable) return;
       r.x = Math.max(home[i].x - limit, Math.min(home[i].x + limit, r.x));
       r.y = Math.max(home[i].y - limit, Math.min(home[i].y + limit, r.y));
       if (bounds) {
@@ -389,5 +396,5 @@ export function spread(
     // Settled, or a cluster too dense to move farther. Either way another round changes nothing.
     if (shift < 0.05) break;
   }
-  return rects;
+  return rects.slice(0, movable);
 }
