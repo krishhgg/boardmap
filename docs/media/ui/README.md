@@ -22,6 +22,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `board/hackrf/board.png`, `board/corne/board.png` | 1440 × 900 | Board layout draws each footprint outline from its pad extents inside a bounding frame. Electrical changes sit on top and carry their references. |
 | `board/hackrf/board-reach.png`, `board/corne/board-reach.png` | 1440 × 900 | A trace in Board layout. |
 | `board/hackrf/board-phone-nearby.png` | 390 × 844 | A tap 7 pixels off C159 previews it and lists the changes within 30 pixels as full-size buttons under the board. |
+| `board/hackrf/board-phone-label-tap.png`, `board/corne/board-phone-label-tap.png` | 390 × 844 | Tapping the name "U18" or "J2" previews that part, not whatever marker sits under the name. |
 | `board/corne/board-cluster.png` | 2× crop of `board.png` | F1, R8, R9 and ZD1 sit within 20 pixels on the real board. Their markers are spread apart and each has its own label. |
 | `board/hackrf/board-phone.png`, `board/corne/board-phone.png` | 390 × 844 | The same view on a phone. The canvas takes the board's shape, so Corne's wide board is not left in a strip of empty canvas. |
 | `polish/corne-map.png` | 1440 × 900 | The Metadata legend swatch matches the metadata tiles, and the narrow Root sheet header shows its whole name. |
