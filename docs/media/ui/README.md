@@ -20,6 +20,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `board/hackrf/board.png`, `board/corne/board.png` | 1440 × 900 | Board layout draws each footprint outline from its pad extents inside a bounding frame. Electrical changes sit on top and carry their references. |
 | `board/hackrf/board-reach.png`, `board/corne/board-reach.png` | 1440 × 900 | A trace in Board layout. |
 | `board/hackrf/board-phone.png` | 390 × 844 | The same view on a phone. |
+| `polish/corne-map.png` | 1440 × 900 | The Metadata legend swatch matches the metadata tiles, and the narrow Root sheet header shows its whole name. |
 
 Recordings of drill-in, drill-out and curve motion are on the `pr-assets` branch, outside the installed package and the main history.
 
