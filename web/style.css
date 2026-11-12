@@ -1514,7 +1514,7 @@ footer {
 }
 .board .tile.hovered,
 .board .tile:focus-visible {
-  z-index: 2;
+  z-index: auto;
 }
 .board-label {
   position: absolute;
@@ -1582,6 +1582,12 @@ footer {
   }
   .legend .legend-note {
     display: none;
+  }
+  /* The board view's limits stay stated at every width. */
+  .legend .legend-note.board {
+    display: block;
+    flex-basis: 100%;
+    margin-left: 0;
   }
   .toolbar {
     gap: 8px;

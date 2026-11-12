@@ -567,6 +567,7 @@ function buildMap(restore) {
   const root = $("tiles");
   root.replaceChildren();
   root.classList.toggle("board", state.view === "board");
+  $("map-scale-note").classList.toggle("board", state.view === "board");
   $("connections").replaceChildren();
   const shown = report.parts.filter((p) => inScope(p) && matches(p));
   $("impact").classList.toggle("sheet-scope", Boolean(state.scope?.sheet));
@@ -749,26 +750,27 @@ function renderBoard(shown, w, h) {
   );
   $("tiles").append(frame);
   const placed = [],
-    rects = new Map(),
-    area = (p) => boxes.get(p.id).w * boxes.get(p.id).h;
-  // Large outlines go down first and electrical changes last, so nothing small is buried.
-  const drawn = [...shown].sort(
-    (a, b) => isElectrical(a) - isElectrical(b) || area(b) - area(a),
-  );
-  for (const p of drawn) {
+    rects = new Map();
+  for (const p of shown) {
     const box = boxes.get(p.id),
       least = isElectrical(p) ? (w < 500 ? 11 : 14) : 7,
       width = Math.max(least, box.w * scale),
-      height = Math.max(least, box.h * scale),
-      rect = {
-        x: ox + (box.x + box.w / 2 - minX) * scale - width / 2,
-        y: oy + (box.y + box.h / 2 - minY) * scale - height / 2,
-        w: width,
-        h: height,
-      };
-    rects.set(p.id, rect);
-    if (isElectrical(p)) placed.push(rect);
-    tile(p, rect, $("tiles"), 0);
+      height = Math.max(least, box.h * scale);
+    rects.set(p.id, {
+      x: ox + (box.x + box.w / 2 - minX) * scale - width / 2,
+      y: oy + (box.y + box.h / 2 - minY) * scale - height / 2,
+      w: width,
+      h: height,
+    });
+  }
+  // Larger markers go down first, so a part inside another footprint stays on top and
+  // selectable. Hover does not raise a marker, which keeps that order under the pointer.
+  const size = (p) => rects.get(p.id).w * rects.get(p.id).h;
+  for (const p of [...shown].sort(
+    (a, b) => size(b) - size(a) || isElectrical(a) - isElectrical(b),
+  )) {
+    if (isElectrical(p)) placed.push(rects.get(p.id));
+    tile(p, rects.get(p.id), $("tiles"), 0);
   }
   // Name the changed parts whose markers are too small to hold a reference.
   const clear = (box) =>

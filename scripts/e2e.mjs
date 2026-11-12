@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { reach } from "../src/compare.js";
-import { changeGroup, changedPins, isElectrical } from "../web/review.js";
+import { changeGroup, changedPins, footprintExtent, isElectrical } from "../web/review.js";
 import { buildReport } from "../src/git.js";
 import { serve } from "../src/server.js";
 import { reviewFixture } from "./fixture.mjs";
@@ -1080,19 +1080,62 @@ try {
       framed: tiles.every((tile) => inside(tile.getBoundingClientRect())),
       smallest: Math.min(...tiles.filter((tile) => tile.matches(".electrical, .added:not(.metadata), .removed:not(.metadata)"))
         .map((tile) => Math.min(tile.offsetWidth, tile.offsetHeight))),
-      order: tiles.map((tile) => tile.matches(".electrical, .added:not(.metadata), .removed:not(.metadata)")),
+      areas: tiles.map((tile) => {
+        const box = tile.getBoundingClientRect();
+        return box.width * box.height;
+      }),
       named: tiles.filter((tile) => tile.querySelector(".ref") ||
         tile.nextElementSibling?.classList.contains("board-label")).length,
-      shapes: new Set(tiles.map((tile) => `${tile.offsetWidth}x${tile.offsetHeight}`)).size,
+      sizes: Object.fromEntries(tiles.map((tile) =>
+        [tile.dataset.id, [tile.offsetWidth, tile.offsetHeight]])),
     };
   });
   assert.ok(board.framed, "every footprint sits inside the board frame");
   assert.ok(board.smallest >= 11, "electrical changes keep a selectable marker");
-  assert.deepEqual(board.order, [...board.order].sort((a, b) => a - b),
-    "electrical changes are drawn above unchanged footprints");
+  assert.ok(board.areas.every((area, index) => !index || area <= board.areas[index - 1] + 0.5),
+    "smaller markers are drawn above larger ones, so a part inside another stays selectable");
   assert.ok(board.named > 0, "the board names parts");
-  if (new Set(report.parts.map((p) => p.footprint)).size > 3)
-    assert.ok(board.shapes > 3, "markers follow each footprint's own extent");
+  // The widest footprint in view keeps its own proportions.
+  const widest = report.parts
+    .filter((p) => board.sizes[p.id])
+    .map((p) => {
+      const extent = footprintExtent(p);
+      return { id: p.id, w: extent.maxX - extent.minX, h: extent.maxY - extent.minY };
+    })
+    .sort((a, b) => b.w * b.h - a.w * a.h)[0];
+  const [markerWidth, markerHeight] = board.sizes[widest.id];
+  assert.ok(Math.abs(markerWidth / markerHeight - widest.w / widest.h) <= 0.15 * (widest.w / widest.h),
+    "a marker follows its footprint's extent");
+  const tall = await page.locator("#tiles .tile").evaluateAll((tiles) => {
+    const outer = tiles[0].getBoundingClientRect();
+    const inner = tiles.slice(1).find((tile) => {
+      const box = tile.getBoundingClientRect();
+      return box.left >= outer.left && box.right <= outer.right &&
+        box.top >= outer.top && box.bottom <= outer.bottom;
+    });
+    if (!inner) return null;
+    const box = inner.getBoundingClientRect();
+    return { id: inner.dataset.id, x: box.x + box.width / 2, y: box.y + box.height / 2,
+      ox: outer.x + 2, oy: outer.y + 2, outer: tiles[0].dataset.id };
+  });
+  if (tall) {
+    await page.mouse.move(tall.ox, tall.oy);
+    await page.mouse.move(tall.ox + 1, tall.oy + 1);
+    await previewSettled(tall.outer);
+    assert.equal(await page.evaluate(({ x, y }) =>
+      document.elementFromPoint(x, y).closest(".tile")?.dataset.id, tall), tall.id,
+      "hovering a large footprint leaves the parts inside it reachable");
+    await page.mouse.move(1, 1);
+    await previewSettled(null);
+  }
+  for (const width of [1100, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    assert.ok(await page.locator("#map-scale-note").isVisible(),
+      `the board view states its limits at ${width}px`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await capture("board");
   await page.locator("#map-tab").click();
   if (report.boards.length === 1) {
