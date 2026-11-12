@@ -594,8 +594,8 @@ try {
     assert.equal(await page.locator("#connections path:not(.gained):not(.lost)").count(), 0,
       "a hub trace draws curves for changed connections only");
     assert.match(await page.locator("#impact p").innerText(), /changed links only/);
-    assert.ok(await page.locator(".tile.affected:not(.gained):not(.lost)").first().evaluate((tile) =>
-      getComputedStyle(tile).boxShadow === "none"),
+    assert.ok(await page.locator(".tile.affected:not(.gained):not(.lost)").evaluateAll((tiles) =>
+      tiles.every((tile) => getComputedStyle(tile).boxShadow === "none")),
       "an unchanged connection on a hub trace has no ring");
   }
   assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
