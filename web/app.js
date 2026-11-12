@@ -58,6 +58,7 @@ let report,
   hoverRetarget,
   lastHoverPoint,
   lastTouch,
+  touchPoint,
   zoomAnimation;
 const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
@@ -1087,18 +1088,19 @@ function renderBoard(shown, w, h) {
         openDiff(p, partOrigin(marker));
         return;
       }
-      // The name's hit area reaches past its text. A touch in that margin that lands
-      // squarely on another changed marker belongs to that marker.
-      const text = label.getBoundingClientRect(),
-        margin =
-          event.clientX < text.left ||
-          event.clientX > text.right ||
-          event.clientY < text.top ||
-          event.clientY > text.bottom,
-        under = margin
-          ? document
-              .elementsFromPoint(event.clientX, event.clientY)
-              .find((node) => node.matches(".tile:not(.unchanged):not(.metadata)"))
+      // Browsers snap a touch to a nearby control, so go by where the finger landed.
+      const at = touchPoint ?? { x: event.clientX, y: event.clientY },
+        text = label.getBoundingClientRect(),
+        beyond = Math.max(text.left - at.x, at.x - text.right, text.top - at.y, at.y - text.bottom);
+      // The name's hit area reaches 6px past its text. A touch in that margin that lands
+      // squarely on another changed marker belongs to that marker, and a touch farther
+      // out belongs to the nearest small change, if one is close.
+      const under =
+        beyond > 0
+          ? (document
+              .elementsFromPoint(at.x, at.y)
+              .find((node) => node.matches(".tile:not(.unchanged):not(.metadata)")) ??
+            (beyond > 6 ? nearestChange(at.x, at.y) : null))
           : null;
       if (under) touchPart(under, parts.get(under.dataset.id));
       else touchPart(marker, p);
@@ -2408,6 +2410,7 @@ async function init() {
     });
     document.addEventListener("pointerdown", (event) => {
       lastTouch = event.pointerType === "touch";
+      touchPoint = lastTouch ? { x: event.clientX, y: event.clientY } : null;
       if (
         lastTouch &&
         state.touchPreview &&

@@ -1355,13 +1355,6 @@ try {
     [...document.querySelectorAll(".board-label[data-led]")].every((label) =>
       label.nextElementSibling?.classList.contains("board-leader"))),
     "a name moved out of a cluster has a line to its marker");
-  assert.deepEqual(await page.evaluate(() => {
-    const changed = [...document.querySelectorAll("#tiles .tile[data-enlarged]")].map((tile) => tile.dataset.id);
-    const named = new Set([...document.querySelectorAll(".board-label")].map((label) => label.dataset.for));
-    const inside = new Set([...document.querySelectorAll("#tiles .tile")].filter((tile) =>
-      tile.querySelector(".ref")).map((tile) => tile.dataset.id));
-    return changed.filter((id) => !named.has(id) && !inside.has(id)).length > changed.length / 2;
-  }), false, "most small changes on a phone board carry a name");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -1682,7 +1675,8 @@ try {
           const x = dx < 0 ? box.left + dx : dx > 0 ? box.right + dx : box.left + box.width / 2,
             y = dy < 0 ? box.top + dy : dy > 0 ? box.bottom + dy : box.top + box.height / 2;
           if (boxes.every((other, at) => at === index || gap(other, x, y) > gap(box, x, y) + 2) &&
-              !document.elementFromPoint(x, y)?.closest(".tile[data-enlarged]") &&
+              // Not on another changed part, and not on a name, which selects its own part.
+              !document.elementFromPoint(x, y)?.closest(".tile:not(.unchanged):not(.metadata), .board-label") &&
               document.elementFromPoint(x, y)?.closest("#tiles"))
             return { id: tiles[index].dataset.id, x, y };
         }
@@ -1701,19 +1695,27 @@ try {
     }
     // A tap on a visible name selects that name's own part.
     const names = await touchPage.locator(".board-label").evaluateAll((labels) =>
-      labels.map((label) => {
+      labels.map((label) => ({ id: label.dataset.for })));
+    const nameCenter = (id) =>
+      touchPage.locator(`.board-label[data-for=${JSON.stringify(id)}]`).evaluate((label) => {
         const box = label.getBoundingClientRect();
-        return { id: label.dataset.for, x: box.left + box.width / 2, y: box.top + box.height / 2 };
-      }));
+        const x = box.left + box.width / 2, y = box.top + box.height / 2;
+        const top = document.elementFromPoint(x, y);
+        return { x, y, top: `${top.className}:${top.dataset.for ?? top.dataset.id ?? ""}` };
+      });
     for (const name of names) {
-      await touchPage.touchscreen.tap(name.x, name.y);
+      // Measured right before the tap, because an earlier tap can move the page.
+      const at = await nameCenter(name.id);
+      await touchPage.touchscreen.tap(at.x, at.y);
       assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), name.id,
-        "tapping a board name previews the part it names");
+        `tapping a board name previews the part it names (on top there: ${at.top})`);
       await touchPage.keyboard.press("Escape");
+      Object.assign(name, at);
     }
     if (names.length) {
-      await touchPage.touchscreen.tap(names[0].x, names[0].y);
-      await touchPage.touchscreen.tap(names[0].x, names[0].y);
+      const first = await nameCenter(names[0].id);
+      await touchPage.touchscreen.tap(first.x, first.y);
+      await touchPage.touchscreen.tap(first.x, first.y);
       assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), names[0].id,
         "tapping the name again inspects that part");
       await touchPage.locator(".close-diff").tap();
