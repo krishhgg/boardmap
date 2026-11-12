@@ -1708,7 +1708,6 @@ footer {
     gap: 12px;
   }
   #stats > .nets,
-  #stats .split,
   .offline {
     display: none;
   }
@@ -1774,7 +1773,16 @@ footer {
   #stats {
     width: 100%;
     justify-content: space-between;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+  }
+  #stats > .parts {
+    display: none;
+  }
+  #stats .split {
+    display: inline-flex;
+    margin-left: 6px;
+    gap: 5px;
   }
   #stats > div {
     flex-direction: row;
@@ -1861,13 +1869,15 @@ footer {
   #breadcrumbs button {
     max-width: 100px;
   }
+  /* One fixed height for idle and traced states, so a tap never moves the map. */
   #impact {
-    height: 176px;
-    min-height: 176px;
+    position: relative;
+    height: 132px;
+    min-height: 132px;
     padding: 8px;
     margin-bottom: 8px;
     gap: 8px;
-    flex-wrap: wrap;
+    overflow-y: auto;
   }
   #impact.sheet-scope {
     position: sticky;
@@ -1876,18 +1886,14 @@ footer {
   }
   #impact > div {
     display: block;
-    flex-basis: calc(100% - 12px);
   }
-  #impact .net-reach-more {
+  #impact .net-reach-more,
+  .reach-start {
     display: none;
   }
   .reach-key {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px 14px;
-    margin-top: 10px;
-    padding: 0;
-    border-left: 0;
+    gap: 6px 14px;
+    margin-top: 8px;
   }
   #impact .net-reach-list {
     gap: 4px 12px;
@@ -1896,27 +1902,26 @@ footer {
   #impact > div > .net-reach-list li span {
     max-width: 112px;
   }
-  #impact p {
-    max-height: none;
-  }
   #impact strong {
     font-family: var(--mono);
     font-size: 12px;
   }
+  /* The inspect action sits beside the part name instead of on a row of its own. */
   #impact .open-preview {
-    margin-left: 12px;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    min-height: 36px;
+    padding: 0 12px;
   }
-  /* The phone readout keeps one height. Starting parts stay on one row and swipe sideways. */
-  #impact {
-    overflow-y: auto;
+  #impact:has(.open-preview) > div > strong {
+    display: block;
+    min-height: 32px;
+    padding-right: 104px;
   }
-  .reach-start {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .reach-start > * {
-    flex-shrink: 0;
+  /* At the top level there is nowhere to go back to, so the breadcrumb row is not drawn. */
+  #breadcrumbs:has(> button:only-child) {
+    display: none;
   }
   #canvas {
     min-height: 380px;

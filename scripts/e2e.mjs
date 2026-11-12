@@ -82,6 +82,11 @@ const hoverPart = async (node) => {
   await node.hover();
   await previewSettled(await node.getAttribute("data-id"));
 };
+// On phones the breadcrumb is drawn only below the top level.
+const goHome = async (surface) => {
+  const home = surface.locator("#breadcrumbs button").first();
+  if (await home.isVisible()) await home.click();
+};
 const assertReadoutFits = async (surface) => {
   const clipped = await surface.locator("#impact").evaluate((box) => {
     const bounds = box.getBoundingClientRect();
@@ -1046,7 +1051,7 @@ try {
   await previewSettled(null);
   assert.equal(await page.locator("#connections path").count(), 0,
     "mouse drill-in does not keep an unrequested first-component reach");
-  await page.locator("#breadcrumbs button").first().click();
+  await goHome(page);
   await page.locator(".group-title").first().press("Enter");
   assert.ok(
     await page.evaluate(() =>
@@ -1122,7 +1127,7 @@ try {
     await assertReturnedPart(page, candidate.id);
     assert.ok(await page.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`).isVisible());
     await capture("board-list-return");
-    await page.locator("#breadcrumbs button").first().click();
+    await goHome(page);
     await page.locator(`.part-row[data-id=${JSON.stringify(candidate.id)}]`).press("Enter");
     await page.locator(".reach-details > summary").click();
     const neighbor = page.locator(".reach-part").first();
@@ -1136,7 +1141,7 @@ try {
     await assertReturnedPart(page, neighborId);
     assert.ok(await page.locator(`.tile[data-id=${JSON.stringify(neighborId)}]`).isVisible());
     await capture("board-neighbor-return");
-    await page.locator("#breadcrumbs button").first().click();
+    await goHome(page);
     for (const file of populatedBoards) {
       await page
         .getByRole("button", { name: file, exact: true })
@@ -1157,7 +1162,7 @@ try {
           .map((p) => p.id)
           .sort(),
       );
-      await page.locator("#breadcrumbs button").first().click();
+      await goHome(page);
     }
     await page
       .getByRole("button", { name: populatedBoards.at(-1), exact: true })
@@ -1239,7 +1244,7 @@ try {
   await capture("board");
   await page.locator("#map-tab").click();
   if (report.boards.length === 1) {
-    await page.locator("#breadcrumbs button").first().click();
+    await goHome(page);
     const sheets = await page.locator(".group-title").evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("aria-label")),
     );
@@ -1270,7 +1275,7 @@ try {
         assert.ok(Math.abs(returnedScroll - scroll) <= 1);
         assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight),
           "desktop sheets scroll inside the map instead of the page");
-        await page.locator("#breadcrumbs button").first().click();
+        await goHome(page);
       }
     }
   }
@@ -1311,7 +1316,7 @@ try {
     "no mobile horizontal overflow",
   );
   if (report.boards.length === 1) {
-    await page.locator("#breadcrumbs button").first().click();
+    await goHome(page);
     for (const group of await page.locator(".group-title").all()) {
       const box = await group.boundingBox();
       assert.ok(
@@ -1364,7 +1369,7 @@ try {
     }
     await touchPage.locator("#renames-toggle").tap();
     await touchCapture("touch-renames");
-    await touchPage.locator("#stats .parts").tap();
+    await touchPage.locator("#stats .changed").tap();
     await touchPage.locator("#renames").waitFor({ state: "hidden" });
   }
   const tapSamePoint = async () => {
@@ -1459,7 +1464,7 @@ try {
       point.y <= previewBox.y + previewBox.height,
     "preview keeps the original physical tap point inside the same tile",
   );
-  assert.equal((await touchPage.locator("#impact").boundingBox()).height, 176);
+  assert.equal((await touchPage.locator("#impact").boundingBox()).height, 132);
   await touchPage.touchscreen.tap(point.x, point.y);
   assert.ok(
     await touchPage.locator("#diff-panel").isVisible(),
@@ -1523,7 +1528,7 @@ try {
   );
   await tapSamePoint();
   // Keep this outside tap away from the browser's expanded disclosure target.
-  await touchPage.locator("#stats .parts").tap();
+  await touchPage.locator("#stats .changed").tap();
   assert.equal(
     await touchPage.locator(".open-preview").count(),
     0,
@@ -1554,9 +1559,9 @@ try {
   );
 
   if (report.boards.length === 1) {
-    await touchPage.locator("#breadcrumbs button").first().tap();
+    await goHome(touchPage);
     const canvasTop = (await touchPage.locator("#canvas").boundingBox()).y;
-    assert.ok(canvasTop <= 422, `the phone map starts in the upper half of the screen, at ${canvasTop}px`);
+    assert.ok(canvasTop <= 340, `the phone map starts in the upper 40% of the screen, at ${canvasTop}px`);
     const sliver = await touchPage.locator(".group .tile").evaluateAll((nodes) =>
       nodes.find((node) => {
         const box = node.getBoundingClientRect();
@@ -1566,12 +1571,19 @@ try {
       await touchPage.locator(`.tile[data-id=${JSON.stringify(sliver)}]`).tap();
       assert.match(await touchPage.locator("#breadcrumbs").innerText(), /\//,
         "tapping a part too small for a fingertip opens its sheet");
-      assert.equal(await touchPage.locator(".open-preview").count(), 0);
-      assert.equal(await touchPage.locator(`.tile[data-id=${JSON.stringify(sliver)}]`).count(), 1);
+      assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), sliver,
+        "the tapped part stays marked in its opened sheet");
+      assert.ok(await touchPage.locator(".open-preview").isVisible(),
+        "the tapped part is previewed with its inspect action");
+      const kept = await touchPage.locator(`.tile[data-id=${JSON.stringify(sliver)}]`).boundingBox(),
+        cover = await touchPage.locator("#impact").boundingBox();
+      assert.ok(kept.y >= cover.y + cover.height && kept.y + kept.height <= 844,
+        "the tapped part is scrolled into view below the readout");
+      await touchPage.keyboard.press("Escape");
       const sides = await touchPage.locator(".tile").evaluateAll((nodes) =>
         nodes.map((node) => Math.min(node.getBoundingClientRect().width, node.getBoundingClientRect().height)));
       assert.ok(sides.every((side) => side >= 32), "the opened sheet gives every part a full touch target");
-      await touchPage.locator("#breadcrumbs button").first().tap();
+      await goHome(touchPage);
     }
     await touchPage.locator(".group-title").first().tap();
     const targets = await touchPage.locator(".tile").evaluateAll((nodes) => nodes.map((node) => {
@@ -1619,7 +1631,7 @@ try {
   }
 
   if (report.boards.length === 1) {
-    await touchPage.locator("#breadcrumbs button").first().tap();
+    await goHome(touchPage);
     const names = await touchPage.locator(".group-title").evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("aria-label")),
     );
@@ -1631,7 +1643,7 @@ try {
         await assertReadoutFits(touchPage);
         await touchCapture("touch-root");
       }
-      await touchPage.locator("#breadcrumbs button").first().tap();
+      await goHome(touchPage);
     }
   }
   await touch.close();
@@ -1879,6 +1891,29 @@ try {
       }
     }
     await moving.close();
+    // With motion on, a tapped sliver is still in view once its sheet has zoomed open.
+    const swipe = await browser.newContext({
+      viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
+    });
+    const hand = await swipe.newPage();
+    hand.on("pageerror", (e) => errors.push(e.message));
+    await hand.goto(`http://127.0.0.1:${server.address().port}`);
+    await hand.locator(".tile").first().waitFor();
+    const thin = await hand.locator(".group .tile").evaluateAll((nodes) =>
+      nodes.findLast((node) => {
+        const box = node.getBoundingClientRect();
+        return Math.min(box.width, box.height) < 20;
+      })?.dataset.id);
+    if (thin) {
+      await hand.locator(`.tile[data-id=${JSON.stringify(thin)}]`).tap();
+      await hand.waitForFunction(() =>
+        !document.getElementById("canvas").classList.contains("zooming"));
+      const held = await hand.locator(`.tile[data-id=${JSON.stringify(thin)}]`).boundingBox();
+      assert.ok(held.y >= 0 && held.y + held.height <= 844,
+        "after the zoom the tapped part is in view");
+      assert.ok(await hand.locator(".open-preview").isVisible());
+    }
+    await swipe.close();
   }
   assert.deepEqual(errors, []);
   console.log(
