@@ -154,6 +154,11 @@ try {
     await shot(page, "phone-idle");
     await tileFor(page, subject).tap();
     await settle(page);
+    // A part too small for a fingertip opens its sheet first. Tap it there.
+    if (!(await page.locator(".open-preview").count())) {
+      await tileFor(page, subject).tap();
+      await settle(page);
+    }
     await shot(page, "phone-preview");
     await page.locator(".open-preview").tap();
     await settle(page);
