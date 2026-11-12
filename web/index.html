@@ -60,7 +60,7 @@
         <div class="aside-foot">
           <span id="list-help" class="visually-hidden"
             >Up and Down arrows, Home and End move through components. Enter or
-            Space inspects. Tab moves to Reach.</span
+            Space inspects. Tab moves to the map controls.</span
           ><span id="map-help" class="visually-hidden"
             >In the map, arrows step through controls, Home and End jump, Enter
             or Space opens.</span
@@ -75,6 +75,7 @@
       </aside>
       <main>
         <div class="toolbar">
+          <nav id="breadcrumbs" aria-label="Sheet navigation"></nav>
           <div class="map-settings">
             <label
               ><span class="wide">Reach</span>
@@ -103,10 +104,6 @@
             </button>
           </div>
         </div>
-        <div class="location-bar">
-          <nav id="breadcrumbs" aria-label="Sheet navigation"></nav>
-          <span id="scope-count"></span>
-        </div>
         <div id="impact" aria-live="polite"></div>
         <div id="map-panel">
           <div id="canvas">
@@ -120,14 +117,14 @@
             <div id="map-empty" hidden>No components match this search.</div>
           </div>
           <div class="legend">
+            <span id="scope-count"></span>
             <span><i class="electrical"></i>Electrical edits <b data-count="electrical"></b></span
             ><span><i class="modified"></i>Metadata <b data-count="metadata"></b></span
             ><span><i class="added"></i>Added <b data-count="added"></b></span
             ><span><i class="removed"></i>Removed <b data-count="removed"></b></span
             ><span><i class="unchanged"></i>Unchanged <b data-count="unchanged"></b></span
             ><span id="map-scale-note" class="legend-note"
-              >Area weighted by numbered pads, minimum 3 · grouped by board /
-              sheet</span
+              >Area follows pad count</span
             >
           </div>
         </div>
@@ -136,7 +133,7 @@
     </div>
     <footer>
       <span id="selection"></span
-      ><span>Pad connectivity · no routing, DRC or ERC analysis</span>
+      ><span>Pad connectivity. No routing, DRC or ERC.</span>
     </footer>
     <script type="module" src="/app.js"></script>
   </body>

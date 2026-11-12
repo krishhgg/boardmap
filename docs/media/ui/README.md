@@ -22,6 +22,9 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `board/hackrf/board-phone.png` | 390 × 844 | The same view on a phone. |
 | `polish/corne-map.png` | 1440 × 900 | The Metadata legend swatch matches the metadata tiles, and the narrow Root sheet header shows its whole name. |
 | `counts/hackrf-map.png`, `counts/corne-map.png` | 1440 × 900 | The header shows 105 electrical as 67 edits, 9 added and 29 removed, the same three numbers as the legend. Each sheet header splits its count the same way. |
+| `layout/phone-diff.png` | 390 × 844 | A part diff on a phone. |
+
+Every capture in this gallery was retaken after the layout change that moved the breadcrumb into the toolbar and the footer under the change list. At 1440 × 900 the map is 638 pixels tall, up from 545.
 
 Recordings of drill-in, drill-out and curve motion are on the `pr-assets` branch, outside the installed package and the main history.
 
@@ -30,12 +33,8 @@ Recordings of drill-in, drill-out and curve motion are on the `pr-assets` branch
 Use Node 22+, `npm ci` and Playwright Chromium. Set `HACKRF_CACHE` and `CORNE_CACHE` to git caches that hold the pinned objects. `scripts/demo.mjs` fetches them.
 
 ```sh
-node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" docs/media/ui/renames renames
-node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" docs/media/ui/inspector inspector
-node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" docs/media/ui/map/hackrf map phone
-node scripts/capture-ui.mjs corne "$CORNE_CACHE" docs/media/ui/map/corne map
-node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" docs/media/ui/board/hackrf board
-node scripts/capture-ui.mjs corne "$CORNE_CACHE" docs/media/ui/board/corne board
+node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" OUT_DIR
+node scripts/capture-ui.mjs corne "$CORNE_CACHE" OUT_DIR
 ```
 
-The script takes any of the scenes `renames`, `inspector`, `map`, `board`, `phone` and `motion`, and captures all of them when none is named. `motion` records the browser and needs FFmpeg to write a GIF.
+Each run writes every scene into `OUT_DIR`, and the gallery keeps the files named above. The script also takes any of the scenes `renames`, `inspector`, `map`, `board`, `phone` and `motion`. `motion` records the browser and needs FFmpeg to write a GIF.

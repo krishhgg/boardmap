@@ -577,11 +577,9 @@ main {
   min-height: 48px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 16px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 .map-settings {
@@ -628,21 +626,14 @@ select {
   background: #2b343c;
   color: var(--text);
 }
-.location-bar {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-shrink: 0;
-}
 #breadcrumbs {
   display: flex;
   align-items: center;
   gap: 4px;
   color: var(--muted);
-  font-size: 11px;
-  min-width: 0;
+  font-size: 12px;
+  flex: 1;
+  min-width: 120px;
 }
 #breadcrumbs button {
   padding: 5px 0;
@@ -661,7 +652,7 @@ select {
   white-space: nowrap;
 }
 #scope-count {
-  color: var(--faint);
+  color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -674,7 +665,7 @@ select {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
-  min-height: 128px;
+  min-height: 108px;
   height: auto;
   flex-shrink: 0;
   overscroll-behavior: contain;
@@ -753,9 +744,9 @@ main:has(#diff-panel:not([hidden])) > #impact {
   padding-left: 12px;
   font-size: 11px;
 }
-/* Four whole rows, so the list never ends on half a net. */
+/* Three whole rows, so the list never ends on half a net. */
 .net-reach-more .net-reach-list {
-  height: 82px;
+  height: 60px;
   overflow-y: auto;
   overscroll-behavior: contain;
   flex-direction: column;
@@ -789,10 +780,10 @@ main:has(#diff-panel:not([hidden])) > #impact {
   grid-row: 1 / 4;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
   list-style: none;
   margin: 0;
-  padding: 2px 0 2px 12px;
+  padding: 0 0 0 12px;
   border-left: 1px solid var(--line);
   color: var(--muted);
   font-size: 11px;
@@ -1224,16 +1215,43 @@ main:has(#diff-panel:not([hidden])) > #impact {
   color: var(--faint);
 }
 footer {
-  height: 28px;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 0 16px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 16px 10px;
   color: var(--faint);
   font-size: 11px;
+  line-height: 1.5;
+}
+/* On desktop the footer sits under the change list, so the map runs to the bottom edge. */
+@media (min-width: 701px) {
+  body {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  header {
+    grid-column: 1 / -1;
+  }
+  .workspace {
+    display: contents;
+  }
+  aside {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  main {
+    grid-column: 2;
+    grid-row: 2 / 4;
+  }
+  footer {
+    grid-column: 1;
+    grid-row: 3;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
 }
 #diff-panel {
   min-height: 0;
@@ -1681,6 +1699,19 @@ footer {
   .map-settings {
     gap: 8px;
   }
+  .wide {
+    display: none;
+  }
+  .narrow {
+    display: inline;
+  }
+}
+/* The idle sentence takes two lines here. Reserve them so a trace does not move the map.
+   Below 901px the single-column readout keeps its own, taller reserve. */
+@media (min-width: 901px) and (max-width: 1150px) {
+  #impact {
+    min-height: 118px;
+  }
 }
 @media (max-width: 700px) {
   body {
@@ -1770,9 +1801,8 @@ footer {
   }
   .toolbar {
     min-height: 0;
-    padding: 8px 0;
-    flex-wrap: nowrap;
-    gap: 8px;
+    padding: 8px 0 4px;
+    gap: 6px 8px;
   }
   .map-settings {
     flex: 1;
@@ -1787,9 +1817,6 @@ footer {
   }
   /* One row does not fit the narrowest phones. The view switch takes its own row there. */
   @media (max-width: 370px) {
-    .toolbar {
-      flex-wrap: wrap;
-    }
     .view-tabs {
       width: 100%;
     }
@@ -1797,18 +1824,14 @@ footer {
       flex: 1;
     }
   }
-  .location-bar {
-    min-height: 36px;
-    gap: 8px;
-  }
+  /* The breadcrumb takes its own row under the controls. */
   #breadcrumbs {
-    flex: 1;
+    order: 3;
+    flex-basis: 100%;
+    min-height: 28px;
   }
   #breadcrumbs button {
     max-width: 100px;
-  }
-  #scope-count {
-    font-size: 11px;
   }
   #impact {
     height: 176px;
@@ -1876,11 +1899,7 @@ footer {
     font-size: 11px;
   }
   footer {
-    height: auto;
-    min-height: 40px;
     padding: 8px 12px;
-    flex-wrap: wrap;
-    gap: 4px;
   }
   #diff-panel {
     overflow: visible;
@@ -1888,7 +1907,6 @@ footer {
     min-height: 320px;
   }
   main:has(#diff-panel:not([hidden])) > .toolbar,
-  main:has(#diff-panel:not([hidden])) > .location-bar,
   main:has(#diff-panel:not([hidden])) > #impact {
     display: none;
   }
