@@ -875,9 +875,19 @@ function renderBoard(shown, w, h) {
       )
       .map((p) => p.id),
   );
+  // A changed part only a few markers wide must keep its own face, so markers move off it.
+  // Larger footprints legitimately hold parts inside their outline and are left alone.
+  const faces = shown
+    .filter(
+      (p) =>
+        isElectrical(p) &&
+        !enlarged.has(p.id) &&
+        Math.max(rects.get(p.id).w, rects.get(p.id).h) <= floor * 4,
+    )
+    .map((p) => rects.get(p.id));
   spread(
     [...enlarged].map((id) => rects.get(id)),
-    { bounds: { x: 2, y: 2, w: w - 4, h: h - 4 } },
+    { bounds: { x: 2, y: 2, w: w - 4, h: h - 4 }, fixed: faces },
   );
   // Larger markers go down first, so a part inside another footprint stays on top and
   // selectable. Enlarged changes go last, so a neighbor's marker never hides one. Hover
@@ -1046,27 +1056,47 @@ function highlight(id) {
     height: root.height,
   });
   mask.append(svgEl("rect", { width: root.width, height: root.height, fill: "#fff" }));
+  // Each traced tile's name block sits on one chip, and its pad count on another, so a
+  // curve passes behind whole labels instead of threading between their lines.
   const text = document.createRange();
-  for (const label of $("tiles").querySelectorAll(
-    ".tile:is(.hovered, .affected) :is(.ref, .value, .pin-count), .tile:is(.hovered, .affected) + .board-label",
-  )) {
+  const inked = (label) => {
     text.selectNodeContents(label);
-    // A name cut by an ellipsis measures wider than it shows. Keep the mask to what is visible.
+    // A name cut by an ellipsis measures wider than it shows. Keep to what is visible.
     const full = text.getBoundingClientRect(),
-      shown = label.getBoundingClientRect(),
-      left = Math.max(full.left, shown.left) - 3,
-      right = Math.min(full.right, shown.right) + 3;
-    if (right - left > 6)
+      shown = label.getBoundingClientRect();
+    return {
+      left: Math.max(full.left, shown.left),
+      right: Math.min(full.right, shown.right),
+      top: full.top,
+      bottom: full.bottom,
+    };
+  };
+  const chip = (boxes) => {
+    const box = {
+      left: Math.min(...boxes.map((b) => b.left)) - 4,
+      right: Math.max(...boxes.map((b) => b.right)) + 4,
+      top: Math.min(...boxes.map((b) => b.top)) - 2,
+      bottom: Math.max(...boxes.map((b) => b.bottom)) + 2,
+    };
+    if (box.right - box.left > 8)
       mask.append(
         svgEl("rect", {
-          x: left - root.x,
-          y: full.y - root.y - 1,
-          width: right - left,
-          height: full.height + 2,
-          rx: 2,
+          x: box.left - root.x,
+          y: box.top - root.y,
+          width: box.right - box.left,
+          height: box.bottom - box.top,
+          rx: 3,
           fill: "#000",
         }),
       );
+  };
+  for (const tile of $("tiles").querySelectorAll(".tile:is(.hovered, .affected)")) {
+    const names = [...tile.querySelectorAll(".ref, .value")].map(inked);
+    if (names.length) chip(names);
+    const pads = tile.querySelector(".pin-count");
+    if (pads) chip([inked(pads)]);
+    const callout = tile.nextElementSibling;
+    if (callout?.classList.contains("board-label")) chip([inked(callout)]);
   }
   // Sheet headers stay readable too. They are controls, not parts of the trace.
   for (const header of $("tiles").querySelectorAll(".group-title")) {
@@ -1147,20 +1177,24 @@ function highlight(id) {
   if (gained.size) facts.push(el("span", `${gained.size} only in head`, "gained"), " · ");
   if (lost.size) facts.push(el("span", `${lost.size} only in base`, "lost"), " · ");
   const ringed = rails.length
-    ? ` · ${rails.map((net) => net.name.split("/").at(-1)).join(", ")} shown without curves`
+    ? ` · no curves for ${rails.map((net) => net.name.split("/").at(-1)).join(", ")}`
     : "";
   const which = changedOnly
     ? " (changed links only)"
     : dense
       ? " (changed and electrical links only)"
       : "";
-  // How the trace is drawn is secondary to what changed, so it reads quieter.
+  // How the trace is drawn is secondary to what changed, so it reads quieter. Neighbors
+  // outside this view are counted only when there are some.
+  const where = outside
+    ? `${outside} outside${phone ? "" : " this view"} · `
+    : "";
   facts.push(
     el(
       "span",
       phone
-        ? `${visible} in view · ${outside} outside · ${edges.length} ${curveUnit}${rails.length ? ` · ${rails.length} ${rails.length === 1 ? "rail" : "rails"} without curves` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
-        : `${visible} in view${outside ? ` · ${outside} outside this view` : ""} · ${edges.length} ${curveUnit} shown${which}${ringed}. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
+        ? `${where}${edges.length} ${curveUnit}${rails.length ? ` · none for ${rails.length} ${rails.length === 1 ? "rail" : "rails"}` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
+        : `${where}${edges.length} ${curveUnit} shown${which}${ringed}. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
       "drawn",
     ),
   );
@@ -1771,8 +1805,14 @@ function closeDiff() {
     $("map-panel").scrollTop = origin?.mapScrollTop ?? 0;
     mapTarget?.scrollIntoView({ block: "nearest" });
   }
-  if (target?.dataset.id && state.hover !== target.dataset.id)
-    highlight(target.dataset.id);
+  if (target?.dataset.id) {
+    // On a touch screen the returned part stays previewed, with its inspect action.
+    if (matchMedia("(pointer: coarse)").matches) {
+      state.touchPreview = target.dataset.id;
+      state.previewOrigin = partOrigin(target);
+      highlight(target.dataset.id);
+    } else if (state.hover !== target.dataset.id) highlight(target.dataset.id);
+  }
 }
 function padPosition(part, pad) {
   const angle = (part.angle * Math.PI) / 180;
@@ -2051,7 +2091,7 @@ async function init() {
     $("change-count").textContent = report.stats.changed;
     renameDisclosure(report.sheetRenames ?? [], report.netRenames ?? []);
     for (const [key, label] of [
-      ["parts", "parts"],
+      ["parts", "head parts"],
       ["nets", "head nets"],
       ["electrical", "electrical"],
       ["changed", "changed"],

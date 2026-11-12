@@ -357,3 +357,16 @@ test("spreading keeps markers inside the canvas and stays fast on a dense board"
   spread(dense, { bounds: { x: 2, y: 2, w: 400, h: 400 } });
   assert.ok(performance.now() - began < 1000, "4,000 markers spread in well under a second");
 });
+
+test("spread markers move off a fixed footprint and leave it where it is", () => {
+  const face = { x: 100, y: 100, w: 20, h: 20 };
+  const markers = spread(
+    [{ x: 104, y: 104, w: 11, h: 11 }, { x: 108, y: 106, w: 11, h: 11 }],
+    { fixed: [face] },
+  );
+  assert.equal(markers.length, 2, "only the movable boxes are returned");
+  assert.deepEqual(face, { x: 100, y: 100, w: 20, h: 20 });
+  for (const m of markers)
+    assert.ok(m.x + m.w <= face.x + 0.5 || m.x >= face.x + face.w - 0.5 ||
+      m.y + m.h <= face.y + 0.5 || m.y >= face.y + face.h - 0.5, "a marker clears the footprint");
+});

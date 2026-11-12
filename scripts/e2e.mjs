@@ -601,7 +601,7 @@ try {
   assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
     "rails shown without curves are marked in the net list");
   if (railed)
-    assert.match(await page.locator("#impact p").innerText(), /shown without curves/,
+    assert.match(await page.locator("#impact p").innerText(), /no curves for /,
       "the readout says which rails are shown without curves");
   const leadingNet = await page.locator(".net-reach-list li").first().boundingBox();
   const readout = await page.locator("#impact").boundingBox();
@@ -1527,6 +1527,11 @@ try {
   await touchPage.locator(".close-diff").tap();
   await touchPage.waitForTimeout(500);
   await assertReturnedPart(touchPage, candidate.id);
+  assert.ok(
+    await touchPage.getByRole("button", { name: `Open ${candidate.ref} diff`, exact: true }).isVisible(),
+    "the returned part keeps its inspect action on a touch screen",
+  );
+  await touchPage.keyboard.press("Escape");
   const point = await tapSamePoint();
   const previewBox = await touchTile.boundingBox();
   assert.ok(
@@ -1598,6 +1603,8 @@ try {
     canvasBox.y >= 0 && canvasBox.y + canvasBox.height <= 844,
     "Back brings the map into view",
   );
+  // The returned part is still previewed. Clear it so the next tap starts a fresh preview.
+  await touchPage.keyboard.press("Escape");
   await tapSamePoint();
   // Keep this outside tap away from the browser's expanded disclosure target.
   await touchPage.locator("#stats .changed").tap();
@@ -1635,6 +1642,15 @@ try {
       await touchPage.locator(".close-diff").tap();
       await touchPage.keyboard.press("Escape");
     }
+    // A changed part only a few markers wide keeps its own face clear of spread markers.
+    const buried = await touchPage.locator("#tiles .tile:not(.unchanged):not(.metadata):not([data-enlarged])")
+      .evaluateAll((tiles) => tiles.filter((tile) => {
+        const box = tile.getBoundingClientRect();
+        if (Math.max(box.width, box.height) > 44) return false;
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return hit?.closest(".tile[data-enlarged]");
+      }).map((tile) => tile.title.split(" · ")[0]));
+    assert.deepEqual(buried, [], "no small enlarged marker sits on the center of a mid-size change");
     // A direct touch on a full-size change is never handed to a small neighbor.
     const direct = await touchPage.locator("#tiles .tile:not(.unchanged):not(.metadata):not([data-enlarged])")
       .evaluateAll((tiles) => {

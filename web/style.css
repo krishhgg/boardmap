@@ -788,8 +788,15 @@ main:has(#diff-panel:not([hidden])) > #impact {
   margin-top: 6px;
   line-height: 16px;
 }
+.net-reach-more .net-reach-list {
+  scroll-snap-type: y mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+/* Rows snap into place, so a scrolled list never shows half a net. */
 .net-reach-more .net-reach-list li {
   flex-shrink: 0;
+  scroll-snap-align: start;
 }
 .net-reach-list li.gained b,
 #impact p .gained {
