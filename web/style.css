@@ -1307,6 +1307,14 @@ footer {
   color: var(--blue);
   font-size: 12px;
 }
+.reach-details.none > summary {
+  list-style: none;
+  pointer-events: none;
+  color: var(--muted);
+}
+.reach-details.none > summary::-webkit-details-marker {
+  display: none;
+}
 .reach-net h3 {
   position: sticky;
   top: 0;

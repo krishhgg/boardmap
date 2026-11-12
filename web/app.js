@@ -340,7 +340,12 @@ function renderList() {
         matches(p) &&
         (!$("only-changed").checked || p.status !== "unchanged"),
     )
-    .sort(reviewOrder);
+    // A search for a reference lists that exact part first.
+    .sort(
+      (a, b) =>
+        (b.ref.toLowerCase() === state.query) -
+          (a.ref.toLowerCase() === state.query) || reviewOrder(a, b),
+    );
   $("list-count").textContent = `${shown.length} shown`;
   let group;
   for (const p of shown) {
@@ -1483,7 +1488,12 @@ function inspectorImpact(p) {
   const result = reach(report, p.id, state),
     count = result.ids.length;
   const details = $("diff-panel").querySelector(".reach-details");
-  details.querySelector("summary").textContent = `${count} ${state.transitive ? "transitively reachable" : "shared-net"} ${count === 1 ? "neighbor" : "neighbors"} · view parts by net`;
+  // Nothing to open when no part shares a net. The line stays as a plain statement.
+  details.classList.toggle("none", !count);
+  if (!count) details.open = false;
+  details.querySelector("summary").textContent = count
+    ? `${count} ${state.transitive ? "transitively reachable" : "shared-net"} ${count === 1 ? "neighbor" : "neighbors"} · view parts by net`
+    : `0 ${state.transitive ? "transitively reachable" : "shared-net"} neighbors`;
   if (!details.open) return;
   const content = details.querySelector(".reach-parts");
   content.replaceChildren(el(
@@ -1589,9 +1599,18 @@ function regionSvg(selected, key, extent) {
       "font-size": extent / 6,
     });
     label.textContent =
-      key === "before" ? "Not present in base" : "Removed in head";
+      key === "before" ? "Not present in base" : "Removed from head";
     svg.append(label);
     return svg;
+  }
+  if (!anchor.pads.length) {
+    const label = svgEl("text", {
+      "text-anchor": "middle",
+      fill: "#8a9da9",
+      "font-size": extent / 6,
+    });
+    label.textContent = "No pads";
+    svg.append(label);
   }
   const annotations = [];
   for (const p of report.parts) {
