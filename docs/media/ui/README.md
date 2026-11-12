@@ -23,6 +23,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `polish/corne-map.png` | 1440 × 900 | The Metadata legend swatch matches the metadata tiles, and the narrow Root sheet header shows its whole name. |
 | `counts/hackrf-map.png`, `counts/corne-map.png` | 1440 × 900 | The header shows 105 electrical as 67 edits, 9 added and 29 removed, the same three numbers as the legend. Each sheet header splits its count the same way. |
 | `layout/phone-diff.png` | 390 × 844 | A part diff on a phone. |
+| `layout/phone-tiny-part.png` | 390 × 844 | Corne ZD1 is a sliver in the phone overview. One tap opens its sheet with ZD1 previewed and scrolled into view. |
 
 Every capture in this gallery was retaken after the layout change that moved the breadcrumb into the toolbar and the footer under the change list. At 1440 × 900 the map is 638 pixels tall, up from 545.
 
