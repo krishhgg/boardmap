@@ -998,6 +998,10 @@ main:has(#diff-panel:not([hidden])) > #impact {
   fill: var(--blue);
   animation: show-end 0.22s ease-out both;
 }
+.link-start {
+  stroke: #0a0d10;
+  stroke-width: 1;
+}
 .link-end.gained {
   fill: var(--green);
 }
@@ -1205,14 +1209,89 @@ main:has(#diff-panel:not([hidden])) > #impact {
   outline-offset: -3px;
   box-shadow: inset 0 0 0 3px #0a0d10;
 }
+/* Reached through a rail only: tinted, no ring. */
+.tile.affected.railed {
+  box-shadow: none;
+  outline: none;
+}
+.tile.unchanged.affected.railed {
+  border-color: #2f4a63;
+}
+.tile.affected.railed.gained {
+  border: 1px solid #2f8f6c;
+}
+.tile.unchanged.affected.railed.gained {
+  background: #1b3a31;
+  color: #c4ecdc;
+}
+.tile.affected.railed.lost {
+  border: 1px dashed #a85a6b;
+}
 .tile.hovered,
 .tile:focus-visible {
   outline: 2px solid #fff;
   outline-offset: -2px;
   z-index: 2;
 }
+/* A halo keeps a small traced part easy to find among its neighbors. */
+.tile.hovered {
+  box-shadow:
+    0 0 0 3px #ffffff4d,
+    0 0 16px 5px #ffffff33;
+}
 .tile.dimmed {
   opacity: 0.25;
+}
+#nearby {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding-top: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  color: var(--faint);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+#nearby > * {
+  flex-shrink: 0;
+}
+.nearby-part {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 64px;
+  max-width: 120px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--raised);
+  text-align: left;
+  color: var(--muted);
+  font-size: 11px;
+}
+.nearby-part b {
+  font: 500 12px var(--mono);
+  color: var(--orange);
+}
+.nearby-part.added b {
+  color: var(--green);
+}
+.nearby-part.removed b {
+  color: var(--red);
+  text-decoration: line-through;
+}
+.nearby-part span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nearby-part[aria-pressed="true"] {
+  border-color: #fff;
 }
 .legend {
   display: flex;
