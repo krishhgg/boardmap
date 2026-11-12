@@ -1106,8 +1106,10 @@ try {
     })
     .sort((a, b) => b.w * b.h - a.w * a.h)[0];
   const [markerWidth, markerHeight] = board.sizes[widest.id];
-  assert.ok(Math.abs(markerWidth / markerHeight - widest.w / widest.h) <= 0.15 * (widest.w / widest.h),
-    "a marker follows its footprint's extent");
+  // A marker at its minimum size no longer has its footprint's proportions.
+  if (Math.min(markerWidth, markerHeight) > 16)
+    assert.ok(Math.abs(markerWidth / markerHeight - widest.w / widest.h) <= 0.15 * (widest.w / widest.h),
+      "a marker follows its footprint's extent");
   const tall = await page.locator("#tiles .tile").evaluateAll((tiles) => {
     const outer = tiles[0].getBoundingClientRect();
     const inner = tiles.slice(1).find((tile) => {

@@ -562,7 +562,7 @@ function renderMap(restore) {
 function buildMap(restore) {
   $("map-scale-note").textContent =
     state.view === "board"
-      ? "Footprint outlines from pad extents · small parts enlarged · no copper or board edge"
+      ? "Approximate outlines from pad positions and sizes · small parts enlarged · no copper or board edge"
       : "Area weighted by numbered pads, minimum 3 · grouped by board / sheet";
   const root = $("tiles");
   root.replaceChildren();
