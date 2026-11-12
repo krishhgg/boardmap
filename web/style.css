@@ -148,6 +148,21 @@ header {
 #stats .electrical strong {
   color: var(--orange);
 }
+#stats .split {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+  font-family: var(--mono);
+}
+#stats .split .term-electrical {
+  color: var(--orange);
+}
+#stats .split .term-added {
+  color: var(--green);
+}
+#stats .split .term-removed {
+  color: var(--red);
+}
 #stats .affected strong {
   color: var(--blue);
 }
@@ -1018,17 +1033,29 @@ main:has(#diff-panel:not([hidden])) > #impact {
   font-size: 11px;
   white-space: nowrap;
 }
-.group-electrical {
+.group-changes,
+.group-changes span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--orange);
 }
-.group-electrical i {
+.group-changes {
+  gap: 9px;
+}
+.group-changes i {
   width: 7px;
   height: 7px;
   border-radius: 1px;
-  background: var(--orange);
+  background: currentColor;
+}
+.group-changes .electrical {
+  color: var(--orange);
+}
+.group-changes .added {
+  color: var(--green);
+}
+.group-changes .removed {
+  color: var(--red);
 }
 .chevron {
   width: 6px;
@@ -1612,10 +1639,13 @@ footer {
     display: none;
   }
 }
-@container (max-width: 130px) {
-  .group-title .group-electrical {
+/* The three-count badge gives way before the sheet's name does. */
+@container (max-width: 180px) {
+  .group-title .group-changes {
     display: none;
   }
+}
+@container (max-width: 130px) {
   /* A narrow sheet spends its width on its name. The whole header still opens it. */
   .group-title {
     padding: 0 6px;
@@ -1632,6 +1662,7 @@ footer {
     gap: 12px;
   }
   #stats > .nets,
+  #stats .split,
   .offline {
     display: none;
   }

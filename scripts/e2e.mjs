@@ -239,11 +239,26 @@ try {
   for (const title of await page.locator(".group-title").all()) {
     const ids = await title.locator("xpath=..").locator(".tile").evaluateAll((nodes) =>
       nodes.map((node) => node.dataset.id));
-    const expected = ids.filter((id) => isElectrical(report.parts.find((p) => p.id === id))).length;
-    const shown = title.locator(".group-electrical");
-    assert.equal((await shown.count()) ? Number(await shown.innerText()) : 0, expected,
-      "each sheet header counts its electrical changes");
+    const expected = {};
+    for (const id of ids) {
+      const kind = changeGroup(report.parts.find((p) => p.id === id)).toLowerCase();
+      if (["electrical", "added", "removed"].includes(kind)) expected[kind] = (expected[kind] ?? 0) + 1;
+    }
+    const shown = await title.locator(".group-changes span").evaluateAll((nodes) =>
+      Object.fromEntries(nodes.map((node) => [node.dataset.kind, Number(node.textContent)])));
+    assert.deepEqual(shown, expected,
+      "each sheet header counts electrical edits, added and removed parts as the legend does");
   }
+  assert.ok(await page.locator(".group-title > span:first-child").evaluateAll((names) =>
+    names.every((name) => name.clientWidth >= Math.min(name.scrollWidth, 56))),
+    "a sheet header always leaves room to read its name");
+  const split = await page.locator("#stats .split span").evaluateAll((nodes) =>
+    nodes.map((node) => parseInt(node.textContent, 10)));
+  assert.deepEqual(split, [expectedLegend.electrical, expectedLegend.added, expectedLegend.removed],
+    "the header splits its electrical total into the legend's three classes");
+  assert.equal(split.reduce((sum, count) => sum + count, 0),
+    Number(await page.locator("#stats .electrical strong").innerText()),
+    "the header's electrical total is the sum of those classes");
   assert.equal(await page.locator(".reach-key li").count(), 5,
     "the idle readout explains the trace marks");
   const leading = report.parts.filter(isElectrical);

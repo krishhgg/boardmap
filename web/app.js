@@ -656,12 +656,24 @@ function buildMap(restore) {
         : group.key === "/"
           ? "Root sheet"
           : group.key;
-      const electrical = group.ps.filter(isElectrical).length;
+      // The same three classes, colors and counts as the legend.
+      const counts = { electrical: 0, added: 0, removed: 0 };
+      for (const p of group.ps) {
+        const kind = changeGroup(p).toLowerCase();
+        if (kind in counts) counts[kind]++;
+      }
+      const electrical = counts.electrical + counts.added + counts.removed;
       title.append(el("span", name));
       if (electrical) {
-        const count = el("small", undefined, "group-electrical");
-        count.append(el("i"), String(electrical));
-        title.append(count);
+        const badge = el("small", undefined, "group-changes");
+        for (const [kind, count] of Object.entries(counts)) {
+          if (!count) continue;
+          const part = el("span", undefined, kind);
+          part.dataset.kind = kind;
+          part.append(el("i"), String(count));
+          badge.append(part);
+        }
+        title.append(badge);
       }
       title.append(
         el(
@@ -671,7 +683,7 @@ function buildMap(restore) {
         ),
         el("span", undefined, "chevron"),
       );
-      title.title = `${groupByBoard ? group.key : name}\n${electrical} electrical ${electrical === 1 ? "change" : "changes"} · ${group.ps.length} ${group.ps.length === 1 ? "part" : "parts"}`;
+      title.title = `${groupByBoard ? group.key : name}\n${counts.electrical} electrical ${counts.electrical === 1 ? "edit" : "edits"} · ${counts.added} added · ${counts.removed} removed · ${group.ps.length} ${group.ps.length === 1 ? "part" : "parts"}`;
       title.setAttribute(
         "aria-label",
         `Open ${group.key === "/" ? "Root sheet" : group.key}`,
@@ -1863,6 +1875,22 @@ async function init() {
       ["affected", "affected"],
     ]) {
       const box = el("div", undefined, key);
+      const name = el("span", label);
+      if (key === "electrical") {
+        // The total is the legend's three electrical classes. Show the sum's terms.
+        const split = el("span", undefined, "split");
+        for (const [kind, mark] of [
+          ["Electrical", "~"],
+          ["Added", "+"],
+          ["Removed", "−"],
+        ]) {
+          const count = report.parts.filter((p) => changeGroup(p) === kind).length;
+          const term = el("span", `${count}${mark}`, `term-${kind.toLowerCase()}`);
+          term.title = `${count} ${kind === "Electrical" ? "electrical edits" : kind.toLowerCase()}`;
+          split.append(term);
+        }
+        name.append(split);
+      }
       box.append(
         el(
           "strong",
@@ -1870,13 +1898,13 @@ async function init() {
             ? report.parts.filter(isElectrical).length
             : report.stats[key],
         ),
-        el("span", label),
+        name,
       );
       box.title =
         key === "affected"
           ? "Unchanged direct shared-net neighbors of changed parts, excluding ground, across both revisions."
           : key === "electrical"
-            ? "Pin nets, pads, value, footprint, population or part identifier changes, plus added and removed parts with pads. Zero-pad artwork is metadata."
+            ? "Electrical edits, added parts and removed parts, as counted in the legend. Edits are pin net, pad, value, footprint, population or part identifier changes. Zero-pad artwork is metadata."
             : key === "parts"
               ? "Parts in head; removed parts remain visible in the map."
               : "";
