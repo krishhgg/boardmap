@@ -1128,6 +1128,16 @@ try {
       ),
       `no horizontal overflow at ${width}px`,
     );
+    assert.ok(
+      await page.evaluate(() => {
+        const boxes = [...document.querySelectorAll(".map-settings label, .view-tabs")]
+          .map((node) => node.getBoundingClientRect());
+        return boxes.every((a, i) => boxes.every((b, j) => i === j ||
+          a.right <= b.left + 1 || b.right <= a.left + 1 ||
+          a.bottom <= b.top + 1 || b.bottom <= a.top + 1));
+      }),
+      `map controls do not overlap at ${width}px`,
+    );
   }
   assert.ok(
     await page.evaluate(

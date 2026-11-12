@@ -1665,6 +1665,18 @@ footer {
   .view-tabs button {
     padding: 6px 12px;
   }
+  /* One row does not fit the narrowest phones. The view switch takes its own row there. */
+  @media (max-width: 370px) {
+    .toolbar {
+      flex-wrap: wrap;
+    }
+    .view-tabs {
+      width: 100%;
+    }
+    .view-tabs button {
+      flex: 1;
+    }
+  }
   .location-bar {
     min-height: 36px;
     gap: 8px;
