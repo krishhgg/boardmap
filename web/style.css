@@ -805,7 +805,7 @@ main:has(#diff-panel:not([hidden])) > #impact {
 .net-reach-list li b {
   font-weight: 500;
 }
-/* A rail whose loads are ringed without curves. */
+/* A rail whose loads are highlighted without curves. */
 .net-reach-list li.rail > span::after {
   content: " ◌";
   color: var(--faint);

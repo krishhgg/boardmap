@@ -568,7 +568,7 @@ try {
       "larger net reach appears first within each tier");
   }
   const expectedLinks = changedLinks(report, candidate.id);
-  // On a busy trace, a rail with more than 12 loads is ringed without curves.
+  // On a busy trace, a rail with more than 12 loads is shown without curves.
   const direct = reach(report, candidate.id),
     lightest = new Map();
   const reachNets = netReachGroups(report, candidate, direct);
@@ -599,10 +599,10 @@ try {
       "an unchanged connection on a hub trace has no ring");
   }
   assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
-    "rails ringed without curves are marked in the net list");
+    "rails shown without curves are marked in the net list");
   if (railed)
-    assert.match(await page.locator("#impact p").innerText(), /ringed without curves/,
-      "the readout says which rails are ringed without curves");
+    assert.match(await page.locator("#impact p").innerText(), /shown without curves/,
+      "the readout says which rails are shown without curves");
   const leadingNet = await page.locator(".net-reach-list li").first().boundingBox();
   const readout = await page.locator("#impact").boundingBox();
   assert.ok(leadingNet.y >= readout.y && leadingNet.y + leadingNet.height <= readout.y + readout.height,
@@ -751,6 +751,8 @@ try {
   );
   assert.equal((await page.locator("#impact").boundingBox()).height, idleHeight,
     "a transitive trace keeps the readout's idle height, so the map does not move");
+  assert.ok(!(await page.locator("#tiles").evaluate((node) => node.classList.contains("hub"))),
+    "a transitive trace is never simplified as a hub");
   const farLinks = changedLinks(report, candidate.id, { transitive: true }),
     nearIds = new Set(reach(report, candidate.id).ids);
   assert.ok(
@@ -1631,6 +1633,26 @@ try {
       assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), miss.id,
         "a second near touch inspects it");
       await touchPage.locator(".close-diff").tap();
+      await touchPage.keyboard.press("Escape");
+    }
+    // A direct touch on a full-size change is never handed to a small neighbor.
+    const direct = await touchPage.locator("#tiles .tile:not(.unchanged):not(.metadata):not([data-enlarged])")
+      .evaluateAll((tiles) => {
+        for (const tile of tiles) {
+          const box = tile.getBoundingClientRect();
+          for (const [fx, fy] of [[0.5, 0.5], [0.2, 0.2], [0.8, 0.8], [0.2, 0.8], [0.8, 0.2]]) {
+            const x = box.left + box.width * fx, y = box.top + box.height * fy;
+            if (document.elementFromPoint(x, y) === tile ||
+                document.elementFromPoint(x, y)?.parentElement === tile)
+              return { id: tile.dataset.id, x, y };
+          }
+        }
+        return null;
+      });
+    if (direct) {
+      await touchPage.touchscreen.tap(direct.x, direct.y);
+      assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), direct.id,
+        "a direct touch on a full-size change previews that part");
       await touchPage.keyboard.press("Escape");
     }
   }

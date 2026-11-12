@@ -989,7 +989,7 @@ function highlight(id) {
   const visibleEdges = result.edges.filter(
     (edge) => centers.has(edge.source) && centers.has(edge.target),
   );
-  // On a busy trace, a rail with many loads is shown by its rings alone. Curves go to the
+  // On a busy trace, a rail with many loads is shown by its highlighted tiles alone. Curves go to the
   // parts that also share a smaller net with the traced part, where a single link can be followed.
   const reachNets = netReachGroups(report, p, result, state.transitive),
     lightest = new Map();
@@ -1005,7 +1005,8 @@ function highlight(id) {
     : visibleEdges;
   // A hub touches so much that unchanged links bury the changed ones. There, curves are
   // drawn for the changed connections alone, and unchanged neighbors keep a quiet tint.
-  const hub = result.ids.length > hubSize;
+  // Direct reach only. A transitive walk needs its unchanged steps to stay connected.
+  const hub = !state.transitive && result.ids.length > hubSize;
   $("tiles").classList.toggle("hub", hub);
   const changedOnly = hub && drawable.some(changed);
   const dense = !changedOnly && drawable.length > 80;
@@ -1146,7 +1147,7 @@ function highlight(id) {
   if (gained.size) facts.push(el("span", `${gained.size} only in head`, "gained"), " · ");
   if (lost.size) facts.push(el("span", `${lost.size} only in base`, "lost"), " · ");
   const ringed = rails.length
-    ? ` · ${rails.map((net) => net.name.split("/").at(-1)).join(", ")} ringed without curves`
+    ? ` · ${rails.map((net) => net.name.split("/").at(-1)).join(", ")} shown without curves`
     : "";
   const which = changedOnly
     ? " (changed links only)"
@@ -1158,7 +1159,7 @@ function highlight(id) {
     el(
       "span",
       phone
-        ? `${visible} in view · ${outside} outside · ${edges.length} ${curveUnit}${rails.length ? ` · ${rails.length} ${rails.length === 1 ? "rail" : "rails"} ringed` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
+        ? `${visible} in view · ${outside} outside · ${edges.length} ${curveUnit}${rails.length ? ` · ${rails.length} ${rails.length === 1 ? "rail" : "rails"} without curves` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
         : `${visible} in view${outside ? ` · ${outside} outside this view` : ""} · ${edges.length} ${curveUnit} shown${which}${ringed}. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
       "drawn",
     ),
@@ -1200,7 +1201,7 @@ function highlight(id) {
       label.title = net.name;
       if (rails.some((rail) => rail.name === net.name)) {
         row.classList.add("rail");
-        row.title = "Every part on this rail is ringed. Curves are drawn for smaller nets.";
+        row.title = "Every part on this rail stays highlighted. Curves are drawn for smaller nets.";
       }
       if (net.change) {
         row.dataset.change = net.change;
@@ -2184,7 +2185,8 @@ async function init() {
       "click",
       (event) => {
         if (state.view !== "board" || !lastTouch || event.detail === 0) return;
-        if (event.target.closest(".tile[data-enlarged]")) return;
+        // A touch that lands on any changed part means that part.
+        if (event.target.closest(".tile:not(.unchanged):not(.metadata)")) return;
         const near = nearestChange(event.clientX, event.clientY);
         if (!near) return;
         event.stopPropagation();
