@@ -11,7 +11,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `inspector/inspector-unchanged.png` | 1440 × 900 | An unchanged part has no red or green cells. |
 | `inspector/inspector-added.png`, `inspector/inspector-removed.png` | 1440 × 900 | Only the revision that holds the part carries color. The other side shows a muted empty mark. |
 | `map/hackrf/map-idle.png`, `map/corne/map-idle.png` | 1440 × 900 | Sheet headers count their electrical changes. The legend counts every tile class in view. The idle readout holds the three largest electrical changes on its title row and the five-mark trace key on one line. |
-| `map/hackrf/map-reach.png`, `map/corne/map-reach.png` | 1440 × 900 | Hovering U17 or ZD1 draws curves that leave and meet tiles square to their edges. Neighbors connected only in head are green, neighbors connected only in base are dashed pink, and neighbors connected in both stay blue. Curves pass behind part names and sheet headers. On HackRF U17, VCC and VAA are shown without curves. |
+| `map/hackrf/map-reach.png`, `map/corne/map-reach.png` | 1440 × 900 | Hovering U17 or ZD1 draws curves that leave and meet tiles square to their edges. Neighbors connected only in head are green, neighbors connected only in base are dashed pink, and neighbors connected in both stay blue. Curves pass behind part names and sheet headers. On HackRF U17, no curves are drawn for the VCC and VAA rails. |
 | `map/hackrf/hub-reach.png` | 1440 × 900 | U23 has 205 neighbors. Curves are drawn for its changed connections only, and neighbors whose connection did not change are tinted without a ring. |
 | `map/hackrf/sheet.png`, `map/hackrf/sheet-reach.png`, `map/corne/sheet.png`, `map/corne/sheet-reach.png` | 1440 × 900 | A drilled sheet, idle and traced. |
 | `map/hackrf/phone-idle.png`, `map/hackrf/phone-preview.png` | 390 × 844 | The phone readout keeps one height. Idle, it holds the instruction and the key. After a tap, it holds the trace with the Open diff action beside the part name. Reach, ground and the view switch share one row, so the map starts in the upper half of the screen. |
@@ -27,7 +27,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `layout/phone-diff.png` | 390 × 844 | A part diff on a phone. |
 | `layout/phone-tiny-part.png` | 390 × 844 | Corne ZD1 is a sliver in the phone overview. One tap opens its sheet with ZD1 previewed and scrolled into view. |
 
-Every capture in this gallery was retaken after the layout change that moved the breadcrumb into the toolbar and the footer under the change list. They were retaken again after the round 2 changes. At 1440 × 900 the map is now 654 pixels tall, up from 545 before this pass.
+Every capture in this gallery was retaken after the layout change that moved the breadcrumb into the toolbar and the footer under the change list. They were retaken again after the round 2 and round 3 changes. At 1440 × 900 the map is now 654 pixels tall, up from 545 before this pass.
 
 Recordings of drill-in, drill-out and curve motion are on the `pr-assets` branch, outside the installed package and the main history.
 
