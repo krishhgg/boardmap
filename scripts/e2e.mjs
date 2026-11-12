@@ -380,12 +380,9 @@ try {
       "Escape returns to the exact originating list row",
     );
     await page.keyboard.press("Tab");
-    assert.equal(
-      await page
-        .locator("#reach")
-        .evaluate((n) => n === document.activeElement),
-      true,
-      "one Tab exits the entire list to Reach",
+    assert.ok(
+      await page.evaluate(() => document.activeElement.matches("#breadcrumbs button")),
+      "one Tab exits the entire list to the map's first control",
     );
   }
   await page.locator('#tiles button[tabindex="0"]').focus();

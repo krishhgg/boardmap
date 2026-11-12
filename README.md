@@ -25,7 +25,7 @@ boardmap main HEAD --json review.json
 
 Both arguments must resolve to commits in the local repository. For PR-style review, pass the merge base as `<base>`. Boardmap compares exactly the two revisions you supply. Uncommitted work is outside the comparison.
 
-By default, it includes every component in boards whose files changed. If no board changed, it includes all boards. The footer names the selection and shows its board count. Use `--board` with an exact repo-relative path to focus on one design. Added and deleted boards remain reviewable. `--json` exports the report without starting a server.
+By default, it includes every component in boards whose files changed. If no board changed, it includes all boards. The footer under the change list names the selection and shows its board count. Use `--board` with an exact repo-relative path to focus on one design. Added and deleted boards remain reviewable. `--json` exports the report without starting a server.
 
 ## Review the electrical impact
 

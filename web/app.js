@@ -574,7 +574,11 @@ function buildMap(restore) {
   $("map-scale-note").textContent =
     state.view === "board"
       ? "Approximate outlines from pad positions and sizes · small parts enlarged · no copper or board edge"
-      : "Area weighted by numbered pads, minimum 3 · grouped by board / sheet";
+      : "Area follows pad count";
+  $("map-scale-note").title =
+    state.view === "board"
+      ? ""
+      : "Tile area is weighted by numbered pads, with a minimum of 3. Tiles are grouped by board and sheet.";
   const root = $("tiles");
   root.replaceChildren();
   root.classList.toggle("board", state.view === "board");
