@@ -1016,7 +1016,7 @@ try {
       }
     }
   }
-  for (const width of [720, 800, 390]) {
+  for (const width of [720, 800, 390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     if (report.sheetRenames?.length || report.netRenames?.length) {
       await page.locator("#renames-toggle").click();
@@ -1435,6 +1435,13 @@ try {
       await proof.keyboard.press("Escape");
       await proof.locator("#renames").waitFor({ state: "hidden" });
     }
+    // A zoomed browser leaves little height. The panel shrinks instead of leaving the screen.
+    await proof.setViewportSize({ width: 360, height: 200 });
+    await proof.locator("#renames-toggle").click();
+    const short = await proof.locator("#renames").boundingBox();
+    assert.ok(short.y + short.height <= 200, "the rename panel never extends below a short viewport");
+    await proof.keyboard.press("Escape");
+    await proof.locator("#renames").waitFor({ state: "hidden" });
     await proof.setViewportSize({ width: 1440, height: 900 });
     await proof
       .locator(`.part-row[data-id=${JSON.stringify(subject.id)}]`)

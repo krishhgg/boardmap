@@ -1364,7 +1364,7 @@ function renameDisclosure(sheetLabels, netLabels) {
       width: `${width}px`,
       left: `${Math.max(edge, Math.min(anchor.left, innerWidth - width - edge))}px`,
       top: `${top}px`,
-      maxHeight: `${Math.max(160, Math.min(440, innerHeight - top - edge))}px`,
+      maxHeight: `${Math.min(440, innerHeight - top - edge)}px`,
     });
   };
   panel.addEventListener("beforetoggle", (event) => {

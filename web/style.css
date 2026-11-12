@@ -110,7 +110,8 @@ header {
 .revision-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
   margin-top: 3px;
   min-width: 0;
 }
@@ -1252,9 +1253,10 @@ footer {
     min-height: 100dvh;
   }
   header {
-    height: 80px;
-    padding: 0 12px;
-    gap: 12px;
+    height: auto;
+    min-height: 80px;
+    padding: 6px 12px;
+    gap: 6px 12px;
     flex-wrap: wrap;
     align-content: center;
   }
@@ -1270,7 +1272,7 @@ footer {
     width: calc(100% - 140px);
   }
   .revision-row {
-    gap: 8px;
+    column-gap: 8px;
   }
   #project {
     font-size: 11px;
