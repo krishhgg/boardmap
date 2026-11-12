@@ -87,6 +87,17 @@ const goHome = async (surface) => {
   const home = surface.locator("#breadcrumbs button").first();
   if (await home.isVisible()) await home.click();
 };
+// A leading net and its part count share one line, and the tooltip keeps the whole name.
+const assertLeadingNetsOnOneLine = async (surface) => {
+  const rows = await surface.locator("#impact > div > .net-reach-list li").evaluateAll((items) =>
+    items.map((item) => ({
+      net: item.dataset.net,
+      height: item.getBoundingClientRect().height,
+      title: item.querySelector("span").title,
+    })));
+  assert.ok(rows.every((row) => row.height <= 20 && row.title === row.net),
+    `leading nets stay on one line with their full name in the tooltip: ${JSON.stringify(rows)}`);
+};
 const assertReadoutFits = async (surface) => {
   const clipped = await surface.locator("#impact").evaluate((box) => {
     const bounds = box.getBoundingClientRect();
@@ -674,6 +685,7 @@ try {
     await page.setViewportSize(viewport);
     await hoverPart(page.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`));
     await assertReadoutFits(page);
+    await assertLeadingNetsOnOneLine(page);
     if (viewport.width === 1024 &&
         report.head === "3bdc5547004c8244de5f37104410c363854e5634" &&
         report.boards.includes("hardware/hackrf-one/hackrf-one.kicad_pcb")) {
@@ -1436,6 +1448,7 @@ try {
     (await touchPage.locator(".affected").count()) > 0,
     "touch highlights neighbors",
   );
+  await assertLeadingNetsOnOneLine(touchPage);
   await touchPage.locator("#ground").tap();
   assert.deepEqual(
     await touchPage.locator(".tile.affected").evaluateAll((nodes) =>
