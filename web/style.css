@@ -1448,6 +1448,16 @@ footer {
 .pad-facts dd.changed {
   color: inherit;
 }
+/* Narrow windows leave a cell too little room for two columns. Stack label over value. */
+@media (max-width: 1000px) {
+  .pad-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .pad-facts dd {
+    margin-bottom: 4px;
+  }
+}
 .more-positions summary {
   display: inline-block;
   cursor: pointer;
@@ -1752,13 +1762,6 @@ footer {
   .semantic td:first-child,
   .semantic th:first-child {
     width: 32%;
-  }
-  .pad-facts {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-  }
-  .pad-facts dd {
-    margin-bottom: 4px;
   }
   .diff-header {
     padding: 12px 0;
