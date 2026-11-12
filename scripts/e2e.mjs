@@ -34,9 +34,12 @@ const server = await serve(report),
   browser = await chromium.launch({
     executablePath: process.env.BOARDMAP_BROWSER || undefined,
   });
+// Layout checks measure tiles at rest, so these contexts ask for reduced motion.
+// The motion check near the end runs with animation enabled.
 const page = await browser.newPage({
   viewport: { width: 1440, height: 900 },
   deviceScaleFactor: 1,
+  reducedMotion: "reduce",
 });
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
@@ -227,6 +230,41 @@ try {
     "rewired pin counts lead the electrical group",
   );
   await capture("map");
+  const legend = await page.locator(".legend [data-count]").evaluateAll((nodes) =>
+    Object.fromEntries(nodes.map((node) => [node.dataset.count, Number(node.textContent)])),
+  );
+  const expectedLegend = { electrical: 0, metadata: 0, added: 0, removed: 0, unchanged: 0 };
+  for (const p of report.parts) expectedLegend[changeGroup(p).toLowerCase()]++;
+  assert.deepEqual(legend, expectedLegend, "the legend counts every tile class in view");
+  for (const title of await page.locator(".group-title").all()) {
+    const ids = await title.locator("xpath=..").locator(".tile").evaluateAll((nodes) =>
+      nodes.map((node) => node.dataset.id));
+    const expected = ids.filter((id) => isElectrical(report.parts.find((p) => p.id === id))).length;
+    const shown = title.locator(".group-electrical");
+    assert.equal((await shown.count()) ? Number(await shown.innerText()) : 0, expected,
+      "each sheet header counts its electrical changes");
+  }
+  assert.equal(await page.locator(".reach-key li").count(), 4,
+    "the idle readout explains the trace marks");
+  const leading = report.parts.filter(isElectrical);
+  assert.equal(await page.locator(".start-part").count(), Math.min(3, leading.length));
+  if (leading.length) {
+    const first = page.locator(".start-part").first(),
+      firstId = await first.getAttribute("data-id");
+    assert.equal(firstId, await page.locator(".part-row").first().getAttribute("data-id"),
+      "the idle readout starts with the same part as the review list");
+    await first.focus();
+    await page.keyboard.press("Escape");
+    assert.ok(await first.evaluate((node) => node === document.activeElement),
+      "an idle readout keeps its focused control when nothing changed");
+    await first.click();
+    assert.equal(await page.locator("#diff-panel").getAttribute("data-id"), firstId);
+    await page.keyboard.press("Escape");
+    await assertReturnedPart(page, firstId);
+    await page.locator("#search").focus();
+    await page.mouse.move(1, 1);
+    await previewSettled(null);
+  }
   const electricalTotal = report.parts.filter(isElectrical).length;
   const edits = report.parts.filter(
     (p) => changeGroup(p) === "Electrical",
@@ -1087,6 +1125,7 @@ try {
     hasTouch: true,
     isMobile: true,
     deviceScaleFactor: 1,
+    reducedMotion: "reduce",
   });
   const touchPage = await touch.newPage();
   touchPage.on("pageerror", (e) => errors.push(e.message));
@@ -1369,6 +1408,7 @@ try {
       viewport: { width, height: hasTouch ? 1024 : 900 },
       hasTouch,
       isMobile: hasTouch,
+      reducedMotion: "reduce",
     });
     const surface = await tablet.newPage();
     surface.on("pageerror", (e) => errors.push(e.message));
@@ -1440,6 +1480,7 @@ try {
     }));
     const proof = await browser.newPage({
       viewport: { width: 1440, height: 900 },
+      reducedMotion: "reduce",
     });
     proof.on("pageerror", (e) => errors.push(e.message));
     await proof.route("**/api/report", (route) =>
@@ -1562,6 +1603,50 @@ try {
       "raw removed sheet label remains available in the inspector",
     );
     await proof.close();
+  }
+  if (report.boards.length === 1 && new Set(report.parts.map((p) => p.sheet)).size > 1) {
+    const moving = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    moving.on("pageerror", (e) => errors.push(e.message));
+    await moving.goto(`http://127.0.0.1:${server.address().port}`);
+    const sheet = moving.locator(".group-title").first(),
+      sheetKey = await sheet.getAttribute("data-focus-key");
+    await sheet.waitFor();
+    for (const leave of [false, true]) {
+      if (leave) await moving.locator("#breadcrumbs button").first().press("Enter");
+      else await sheet.press("Enter");
+      const zoomed = await moving.evaluate(() => {
+        const [animation] = document.getElementById("tiles").getAnimations();
+        return {
+          zooming: document.getElementById("canvas").classList.contains("zooming"),
+          scaled: animation?.effect.getKeyframes()[0].transform.includes("scale"),
+        };
+      });
+      assert.deepEqual(zoomed, { zooming: true, scaled: true },
+        `${leave ? "leaving" : "opening"} a sheet zooms the map between the sheet and the canvas`);
+      await moving.waitForFunction(() =>
+        !document.getElementById("canvas").classList.contains("zooming"));
+      assert.equal(await moving.locator("#tiles").evaluate((node) => getComputedStyle(node).transform),
+        "none", "the map rests untransformed after a zoom");
+      if (leave)
+        assert.equal(await moving.evaluate(() => document.activeElement.dataset.focusKey), sheetKey,
+          "leaving a sheet returns focus to the sheet that was open");
+      else {
+        // Keyboard drill-in focuses a part during the zoom. Its curves must land on resting tiles.
+        const ends = await moving.evaluate(() => {
+          const canvas = document.getElementById("canvas").getBoundingClientRect();
+          const tiles = [...document.querySelectorAll(".tile.affected")].map((tile) =>
+            tile.getBoundingClientRect());
+          return [...document.querySelectorAll("#connections .link")].map((path) => {
+            const end = path.getPointAtLength(path.getTotalLength());
+            const x = end.x + canvas.x, y = end.y + canvas.y;
+            return tiles.some((tile) => x >= tile.left - 1 && x <= tile.right + 1 &&
+              y >= tile.top - 1 && y <= tile.bottom + 1);
+          });
+        });
+        assert.ok(ends.every(Boolean), "curves drawn after a zoom end on their resting tiles");
+      }
+    }
+    await moving.close();
   }
   assert.deepEqual(errors, []);
   console.log(
