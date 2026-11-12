@@ -1294,12 +1294,17 @@ try {
     });
     if (!inner) return null;
     const box = inner.getBoundingClientRect();
+    // Hover a point where the large footprint itself is on top, clear of names and parts.
+    const free = [[2, 2], [outer.width - 3, 2], [2, outer.height - 3], [outer.width - 3, outer.height - 3]]
+      .map(([dx, dy]) => [outer.x + dx, outer.y + dy])
+      .find(([x, y]) => document.elementFromPoint(x, y) === tiles[0]);
+    if (!free) return null;
     return { id: inner.dataset.id, x: box.x + box.width / 2, y: box.y + box.height / 2,
-      ox: outer.x + 2, oy: outer.y + 2, outer: tiles[0].dataset.id };
+      ox: free[0], oy: free[1], outer: tiles[0].dataset.id };
   });
   if (tall) {
     await page.mouse.move(tall.ox, tall.oy);
-    await page.mouse.move(tall.ox + 1, tall.oy + 1);
+    await page.mouse.move(tall.ox, tall.oy + (tall.oy > 400 ? -1 : 1));
     await previewSettled(tall.outer);
     assert.equal(await page.evaluate(({ x, y }) =>
       document.elementFromPoint(x, y).closest(".tile")?.dataset.id, tall), tall.id,
@@ -1333,6 +1338,30 @@ try {
   assert.ok(phoneBoard.slack <= 190 || phoneBoard.height <= 200,
     `the phone board canvas follows the board's shape: ${JSON.stringify(phoneBoard)}`);
   assert.equal(phoneBoard.covered, 0, "no label covers a reference drawn inside a marker");
+  assert.deepEqual(await page.evaluate(() => {
+    const gap = (a, b) => Math.hypot(
+      Math.max(a.left - b.right, 0, b.left - a.right), Math.max(a.top - b.bottom, 0, b.top - a.bottom));
+    const markers = [...document.querySelectorAll("#tiles .tile")].filter((tile) =>
+      tile.matches(".electrical, .added:not(.metadata), .removed:not(.metadata)"));
+    // A name moved out of a cluster is tied to its marker by a line instead.
+    return [...document.querySelectorAll(".board-label:not([data-led])")].filter((label) => {
+      const box = label.getBoundingClientRect();
+      const own = gap(box, markers.find((tile) => tile.dataset.id === label.dataset.for).getBoundingClientRect());
+      return markers.some((tile) => tile.dataset.id !== label.dataset.for &&
+        gap(box, tile.getBoundingClientRect()) <= own);
+    }).map((label) => label.textContent);
+  }), [], "every board name sits nearer its own marker than any other change");
+  assert.ok(await page.evaluate(() =>
+    [...document.querySelectorAll(".board-label[data-led]")].every((label) =>
+      label.nextElementSibling?.classList.contains("board-leader"))),
+    "a name moved out of a cluster has a line to its marker");
+  assert.deepEqual(await page.evaluate(() => {
+    const changed = [...document.querySelectorAll("#tiles .tile[data-enlarged]")].map((tile) => tile.dataset.id);
+    const named = new Set([...document.querySelectorAll(".board-label")].map((label) => label.dataset.for));
+    const inside = new Set([...document.querySelectorAll("#tiles .tile")].filter((tile) =>
+      tile.querySelector(".ref")).map((tile) => tile.dataset.id));
+    return changed.filter((id) => !named.has(id) && !inside.has(id)).length > changed.length / 2;
+  }), false, "most small changes on a phone board carry a name");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));

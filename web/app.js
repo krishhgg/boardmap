@@ -534,7 +534,12 @@ function showNearby(x, y) {
       };
     })
     .filter((near) => near.distance <= 30)
-    .sort((a, b) => a.distance - b.distance);
+    // The previewed part leads, then the rest by distance.
+    .sort(
+      (a, b) =>
+        (b.tile.dataset.id === state.touchPreview) -
+          (a.tile.dataset.id === state.touchPreview) || a.distance - b.distance,
+    );
   strip.replaceChildren(el("span", close.length > 1 ? "Near your tap" : "Tap a change. Close neighbors are listed here."));
   if (close.length < 2) return;
   for (const { tile } of close) {
@@ -972,6 +977,18 @@ function renderBoard(shown, w, h) {
       h: box.height + 2,
     });
   }
+  const gap = (a, b) =>
+    Math.hypot(
+      Math.max(a.x - (b.x + b.w), 0, b.x - (a.x + a.w)),
+      Math.max(a.y - (b.y + b.h), 0, b.y - (a.y + a.h)),
+    );
+  const changes = shown.filter(isElectrical);
+  const ownsSpot = (box, id) => {
+    const own = gap(box, rects.get(id));
+    return changes.every(
+      (other) => other.id === id || gap(box, rects.get(other.id)) > own + 1,
+    );
+  };
   textMetrics.font = `500 10px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
   for (const p of shown.filter(isElectrical).sort(reviewOrder)) {
     const marker = $("tiles").querySelector(
@@ -981,8 +998,10 @@ function renderBoard(shown, w, h) {
     const r = rects.get(p.id),
       width = textMetrics.measureText(p.ref).width + 6,
       height = 14;
-    // Beside the marker first, then its corners, then one step farther out.
-    const spot = [
+    // Beside the marker first, then its corners, then one step farther out. A name there
+    // must sit nearer its own marker than any other change, so it reads as that part's.
+    const sized = (at) => ({ ...at, w: width, h: height });
+    let spot = [
       { x: r.x + r.w + 3, y: r.y + r.h / 2 - height / 2 },
       { x: r.x - width - 3, y: r.y + r.h / 2 - height / 2 },
       { x: r.x + r.w / 2 - width / 2, y: r.y - height - 2 },
@@ -994,8 +1013,27 @@ function renderBoard(shown, w, h) {
       { x: r.x + r.w / 2 - width / 2, y: r.y - height * 2 - 4 },
       { x: r.x + r.w / 2 - width / 2, y: r.y + r.h + height + 4 },
     ]
-      .map((at) => ({ ...at, w: width, h: height }))
-      .find(clear);
+      .map(sized)
+      .find((box) => clear(box) && ownsSpot(box, p.id));
+    // In a crowded cluster the name moves out to free space and a thin line ties it to its marker.
+    let led = false;
+    if (!spot) {
+      const cx = r.x + r.w / 2,
+        cy = r.y + r.h / 2;
+      spot = [26, 38, 52]
+        .flatMap((reach) =>
+          [-90, 90, -45, -135, 45, 135, 0, 180].map((angle) => {
+            const turn = (angle * Math.PI) / 180;
+            return {
+              x: cx + Math.cos(turn) * (reach + width / 2) - width / 2,
+              y: cy + Math.sin(turn) * reach - height / 2,
+            };
+          }),
+        )
+        .map(sized)
+        .find(clear);
+      led = Boolean(spot);
+    }
     if (!spot) continue;
     // On a touch screen a name's hit area reaches 6px past its text. Reserve that too.
     const pad = matchMedia("(any-pointer: coarse)").matches ? 6 : 0;
@@ -1028,6 +1066,22 @@ function renderBoard(shown, w, h) {
       }
     };
     label.onpointerleave = cancelHoverRetarget;
+    if (led) {
+      const from = { x: r.x + r.w / 2, y: r.y + r.h / 2 },
+        to = {
+          x: Math.max(spot.x, Math.min(spot.x + spot.w, from.x)),
+          y: Math.max(spot.y, Math.min(spot.y + spot.h, from.y)),
+        },
+        line = el("i", undefined, `board-leader ${p.status}`);
+      Object.assign(line.style, {
+        left: `${from.x}px`,
+        top: `${from.y}px`,
+        width: `${Math.hypot(to.x - from.x, to.y - from.y)}px`,
+        transform: `rotate(${Math.atan2(to.y - from.y, to.x - from.x)}rad)`,
+      });
+      label.dataset.led = "true";
+      queueMicrotask(() => label.after(line));
+    }
     label.onclick = (event) => {
       if (!lastTouch) {
         openDiff(p, partOrigin(marker));
@@ -1224,10 +1278,15 @@ function highlight(id) {
   for (const edge of edges) {
     const ca = centers.get(edge.source),
       cb = centers.get(edge.target);
-    const a = borderPoint(ca, cb),
+    const edgePoint = borderPoint(ca, cb),
       b = borderPoint(cb, ca);
     const out = normal(ca, cb),
-      back = normal(cb, ca),
+      back = normal(cb, ca);
+    // A curve from the traced part starts inside it, so a part flush against that edge
+    // cannot be mistaken for the source.
+    const inset =
+      edge.source === id ? Math.min(14, Math.min(ca.w, ca.h) * 0.3) : 0,
+      a = { x: edgePoint.x - out.x * inset, y: edgePoint.y - out.y * inset },
       pull = Math.max(10, Math.min(140, Math.hypot(b.x - a.x, b.y - a.y) * 0.45));
     const d = `M ${a.x} ${a.y} C ${a.x + out.x * pull} ${a.y + out.y * pull}, ${b.x + back.x * pull} ${b.y + back.y * pull}, ${b.x} ${b.y}`;
     // Only a curve from the traced part is known to belong to one revision. Farther hops

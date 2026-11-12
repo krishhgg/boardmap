@@ -1797,8 +1797,25 @@ footer {
   color: var(--red);
   text-decoration: line-through;
 }
-.tile.dimmed + .board-label {
+.tile.dimmed + .board-label,
+.tile.dimmed + .board-label + .board-leader {
   opacity: 0.25;
+}
+/* Ties a name that had to move out of a crowded cluster to its marker. */
+.board-leader {
+  position: absolute;
+  height: 1px;
+  transform-origin: 0 0;
+  background: var(--orange);
+  opacity: 0.8;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.board-leader.added {
+  background: var(--green);
+}
+.board-leader.removed {
+  background: var(--red);
 }
 .board-chooser {
   height: 100%;
