@@ -917,14 +917,14 @@ function renderBoard(shown, w, h) {
       )
       .map((p) => p.id),
   );
-  // A changed part only a few markers wide must keep its own face, so markers move off it.
-  // Larger footprints legitimately hold parts inside their outline and are left alone.
+  // A changed part only a few markers wide or tall must keep its own face, so markers move
+  // off it. Larger footprints legitimately hold parts inside their outline and are left alone.
   const faces = shown
     .filter(
       (p) =>
         isElectrical(p) &&
         !enlarged.has(p.id) &&
-        Math.max(rects.get(p.id).w, rects.get(p.id).h) <= floor * 4,
+        Math.min(rects.get(p.id).w, rects.get(p.id).h) <= floor * 4,
     )
     .map((p) => rects.get(p.id));
   spread(
@@ -1013,8 +1013,9 @@ function renderBoard(shown, w, h) {
 }
 // A net with more loads than this is treated as a rail on a busy trace.
 const railSize = 12;
-// A part with more neighbors than this is traced as a hub.
-const hubSize = 60;
+// A part with more neighbors than this, or more curves to draw, is traced as a hub.
+const hubSize = 60,
+  hubCurves = 20;
 function highlight(id) {
   cancelPreviewReset();
   cancelHoverRetarget();
@@ -1073,11 +1074,9 @@ function highlight(id) {
   // A hub touches so much that unchanged links bury the changed ones. There, curves are
   // drawn for the changed connections alone, and unchanged neighbors keep a quiet tint.
   // Direct reach only. A transitive walk needs its unchanged steps to stay connected.
-  // A phone map has a third of the room, so a part counts as a hub there at half the size.
   const hub =
     !state.transitive &&
-    result.ids.length >
-      (matchMedia("(max-width: 700px)").matches ? hubSize / 2 : hubSize);
+    (result.ids.length > hubSize || drawable.length > hubCurves);
   $("tiles").classList.toggle("hub", hub);
   const changedOnly = hub && drawable.some(changed);
   const dense = !changedOnly && drawable.length > 80;
@@ -1149,7 +1148,7 @@ function highlight(id) {
           rx: 3,
           // Dark gray, not black: a curve continues faintly under a name instead of
           // seeming to start at it.
-          fill: "#3d3d3d",
+          fill: "#6e6e6e",
         }),
       );
   };
@@ -1245,14 +1244,13 @@ function highlight(id) {
   const facts = [];
   if (gained.size) facts.push(el("span", `${gained.size} only in head`, "gained"), " · ");
   if (lost.size) facts.push(el("span", `${lost.size} only in base`, "lost"), " · ");
+  const railNames = rails.map((net) => net.name.split("/").at(-1)).join(", ");
   const ringed = rails.length
-    ? ` · no curves for ${rails.map((net) => net.name.split("/").at(-1)).join(", ")}`
+    ? ` · ${rails.length === 1 ? "rail" : "rails"} ${railNames} tinted`
     : "";
-  const which = changedOnly
-    ? " (changed links only)"
-    : dense
-      ? " (changed and electrical links only)"
-      : "";
+  const drawnText = changedOnly
+    ? `${edges.length} changed ${edges.length === 1 ? "link" : "links"} drawn`
+    : `${edges.length} ${curveUnit} shown${dense ? " (changed and electrical links only)" : ""}`;
   // How the trace is drawn is secondary to what changed, so it reads quieter. Neighbors
   // outside this view are counted only when there are some.
   const where = outside
@@ -1262,8 +1260,8 @@ function highlight(id) {
     el(
       "span",
       phone
-        ? `${where}${edges.length} ${curveUnit}${rails.length ? ` · none for ${rails.length} ${rails.length === 1 ? "rail" : "rails"}` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
-        : `${where}${edges.length} ${curveUnit} shown${which}${ringed}. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
+        ? `${where}${changedOnly ? drawnText : `${edges.length} ${curveUnit}`}${rails.length ? ` · ${rails.length} ${rails.length === 1 ? "rail" : "rails"} tinted` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
+        : `${where}${drawnText}${ringed}. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
       "drawn",
     ),
   );
@@ -1304,7 +1302,7 @@ function highlight(id) {
       label.title = net.name;
       if (rails.some((rail) => rail.name === net.name)) {
         row.classList.add("rail");
-        row.title = "Every part on this rail stays highlighted. Curves are drawn for smaller nets.";
+        row.title = "Every part on this rail is tinted. Curves are drawn for smaller nets.";
       }
       if (net.change) {
         row.dataset.change = net.change;
@@ -1810,16 +1808,16 @@ function inspectorImpact(p) {
     "reach-help",
   ));
   // Nets this part joined or left come first, as in the map readout.
-  const joinedOrLeft = (name) => {
+  const membership = (name) => {
     const net = Object.values(report.nets).find(
       (net) => net.file === p.file && net.name === name,
     );
-    return (
-      !state.transitive &&
-      Boolean(net) &&
-      net.before.includes(p.id) !== net.after.includes(p.id)
-    );
+    if (state.transitive || !net) return "";
+    const before = net.before.includes(p.id),
+      after = net.after.includes(p.id);
+    return before === after ? "" : after ? "head" : "base";
   };
+  const joinedOrLeft = (name) => Boolean(membership(name));
   for (const group of netReachGroups(report, p, result, state.transitive).sort(
     (a, b) => joinedOrLeft(b.name) - joinedOrLeft(a.name),
   )) {
@@ -1827,6 +1825,12 @@ function inspectorImpact(p) {
     const section = el("section", undefined, "reach-net");
     section.dataset.net = group.name;
     const heading = el("h3");
+    const side = membership(group.name);
+    if (side) {
+      const sign = el("b", side === "head" ? "+ " : "− ", side === "head" ? "gained" : "lost");
+      sign.title = `${p.ref} is on this net only in ${side}`;
+      heading.append(sign);
+    }
     heading.append(
       netLabel(group.name),
       document.createTextNode(` · ${group.ids.length} ${group.ids.length === 1 ? "part" : "parts"}`),

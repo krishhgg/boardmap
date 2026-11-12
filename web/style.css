@@ -1036,6 +1036,14 @@ main:has(#diff-panel:not([hidden])) > #impact {
 .zooming #tiles {
   pointer-events: none;
 }
+/* Part labels would stretch with the zoom, so they sit out the 260ms and fade back in. */
+.tile > span {
+  transition: opacity 0.12s;
+}
+.zooming .tile > span {
+  opacity: 0;
+  transition: none;
+}
 .zooming #connections {
   visibility: hidden;
 }
@@ -1505,6 +1513,12 @@ footer {
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
+}
+.reach-net h3 .gained {
+  color: var(--green);
+}
+.reach-net h3 .lost {
+  color: var(--red);
 }
 .reach-net h3 {
   position: sticky;

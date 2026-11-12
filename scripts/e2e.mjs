@@ -588,12 +588,12 @@ try {
       "every changed connection off the rails has its own curve");
   }
   // On a hub with changed links, only those links are drawn and unchanged neighbors lose their ring.
-  const hubTrace = direct.ids.length > 60 &&
+  const hubTrace = (direct.ids.length > 60 || direct.ids.filter(drawn).length > 20) &&
     [...expectedLinks.gained, ...expectedLinks.lost].some(drawn);
   if (hubTrace) {
     assert.equal(await page.locator("#connections path:not(.gained):not(.lost)").count(), 0,
       "a hub trace draws curves for changed connections only");
-    assert.match(await page.locator("#impact p").innerText(), /changed links only/);
+    assert.match(await page.locator("#impact p").innerText(), /changed links? drawn/);
     assert.ok(await page.locator(".tile.affected:not(.gained):not(.lost)").evaluateAll((tiles) =>
       tiles.every((tile) => getComputedStyle(tile).boxShadow === "none")),
       "an unchanged connection on a hub trace has no ring");
@@ -610,7 +610,7 @@ try {
   assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
     "rails shown without curves are marked in the net list");
   if (railed)
-    assert.match(await page.locator("#impact p").innerText(), /no curves for /,
+    assert.match(await page.locator("#impact p").innerText(), /rails? .+ tinted/,
       "the readout says which rails are shown without curves");
   const leadingNet = await page.locator(".net-reach-list li").first().boundingBox();
   const readout = await page.locator("#impact").boundingBox();
@@ -629,7 +629,7 @@ try {
   const paths = await page.locator("#connections path").count();
   assert.match(
     await page.locator("#impact").innerText(),
-    new RegExp(`${paths} ${paths === 1 ? "curve" : "curves"} shown`),
+    new RegExp(`${paths} (${paths === 1 ? "curve" : "curves"} shown|changed ${paths === 1 ? "link" : "links"} drawn)`),
   );
   // Move into the real gutter outside this tile, while staying inside the canvas.
   await page.locator("#search").focus();
