@@ -29,11 +29,11 @@ try {
   await page.mouse.move(1420, 890);
   await page.screenshot({ path: `${out}/hackrf-map.png` });
 
-  await page.locator(".sheet-renames summary").click();
-  assert.equal(await page.locator(".sheet-renames li").count(), 6);
+  await page.locator("#renames-toggle").click();
+  assert.equal(await page.locator("#renames li").count(), 6);
   assert.equal(report.netRenames.length, 3);
   await page.screenshot({ path: `${out}/hackrf-labels.png` });
-  await page.locator(".sheet-renames summary").click();
+  await page.keyboard.press("Escape");
 
   const part = report.parts.find((p) => p.ref === "R62");
   await page.locator(`.part-row[data-id=${JSON.stringify(part.id)}]`).click();
@@ -46,8 +46,8 @@ try {
   await page.locator(".close-diff").click();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator(".sheet-renames summary").click();
-  const box = await page.locator(".sheet-renames ul").boundingBox();
+  await page.locator("#renames-toggle").click();
+  const box = await page.locator("#renames").boundingBox();
   assert.ok(box.x >= 0 && box.x + box.width <= 390);
   await page.screenshot({ path: `${out}/hackrf-phone-labels.png` });
   assert.deepEqual(errors, []);

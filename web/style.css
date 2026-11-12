@@ -99,6 +99,7 @@ header {
   font-family: var(--mono);
   min-width: 0;
   flex: 1;
+  container-type: inline-size;
 }
 #project {
   font-size: 12px;
@@ -106,10 +107,18 @@ header {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.revision-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 3px;
+  min-width: 0;
+}
 #revision {
   color: var(--faint);
   font-size: 11px;
-  margin-top: 3px;
+  white-space: nowrap;
 }
 .offline {
   font-size: 11px;
@@ -141,26 +150,174 @@ header {
 #stats .affected strong {
   color: var(--blue);
 }
-.sheet-renames {
+.renames-toggle {
   position: relative;
-  font-size: 11px;
-  color: var(--muted);
-}
-.sheet-renames summary {
-  cursor: pointer;
-}
-.sheet-renames ul {
-  position: absolute;
-  background: var(--raised);
-  padding: 16px 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
   border: 1px solid var(--line);
-  z-index: 10;
-  width: min(480px, 80vw);
-  max-width: 100%;
+  border-radius: 11px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* The pill stays compact. Its hit area is 34px, and 44px for touch. */
+.renames-toggle::before {
+  content: "";
+  position: absolute;
+  inset: -6px -4px;
+}
+@media (pointer: coarse) {
+  .renames-toggle::before {
+    inset: -11px -6px;
+  }
+}
+.renames-toggle:hover,
+.renames-toggle[aria-expanded="true"] {
+  color: var(--text);
+  border-color: var(--faint);
+  background: var(--raised);
+}
+.renames-short {
+  display: none;
+}
+@container (max-width: 400px) {
+  .renames-full {
+    display: none;
+  }
+  .renames-short {
+    display: inline;
+  }
+}
+.caret {
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.12s;
+}
+[aria-expanded="true"] > .caret {
+  transform: translateY(1px) rotate(225deg);
+}
+.renames {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  box-shadow: 0 18px 48px #000a;
+  overflow: hidden;
+  flex-direction: column;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.12s,
+    transform 0.12s,
+    display 0.12s allow-discrete,
+    overlay 0.12s allow-discrete;
+}
+.renames:popover-open {
+  display: flex;
+}
+@starting-style {
+  .renames:popover-open {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.renames-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 6px 6px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.renames-head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.renames-close {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.renames-close:hover {
+  color: var(--text);
+  background: #252e35;
+}
+@media (pointer: coarse) {
+  .renames-close {
+    min-height: 44px;
+  }
+}
+.renames-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 16px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.renames-body:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.renames-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.renames h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 16px 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.renames h3 span {
+  color: var(--faint);
+  font-family: var(--mono);
+}
+.renames ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.renames li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  font: 11px/1.5 var(--mono);
   overflow-wrap: anywhere;
 }
-.sheet-renames li {
-  margin: 4px 0;
+.renames li .before {
+  color: var(--muted);
+}
+.renames li .arrow {
+  color: var(--faint);
+}
+.renames li small {
+  grid-column: 1 / -1;
+  color: var(--faint);
+  font-size: 11px;
 }
 .workspace {
   display: grid;
@@ -1096,9 +1253,10 @@ footer {
     min-height: 100dvh;
   }
   header {
-    height: 80px;
-    padding: 0 12px;
-    gap: 12px;
+    height: auto;
+    min-height: 80px;
+    padding: 6px 12px;
+    gap: 6px 12px;
     flex-wrap: wrap;
     align-content: center;
   }
@@ -1112,6 +1270,9 @@ footer {
   .review-source {
     font-family: var(--mono);
     width: calc(100% - 140px);
+  }
+  .revision-row {
+    column-gap: 8px;
   }
   #project {
     font-size: 11px;

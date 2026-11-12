@@ -1289,6 +1289,96 @@ function regionSvg(selected, key, extent) {
   }
   return svg;
 }
+// Proved label renames are context for the comparison, so they sit beside the revision.
+function renameDisclosure(sheetLabels, netLabels) {
+  const total = sheetLabels.length + netLabels.length;
+  if (!total) return;
+  const counts = [];
+  if (sheetLabels.length) counts.push(`${sheetLabels.length} sheet`);
+  if (netLabels.length) counts.push(`${netLabels.length} net`);
+  const summary = `${counts.join(" · ")} ${total === 1 ? "label" : "labels"} renamed`;
+  const toggle = el("button", undefined, "renames-toggle");
+  toggle.id = "renames-toggle";
+  toggle.type = "button";
+  toggle.setAttribute("aria-label", summary);
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.setAttribute("aria-controls", "renames");
+  toggle.append(
+    el("span", summary, "renames-full"),
+    el("span", `${total} renamed`, "renames-short"),
+    el("span", undefined, "caret"),
+  );
+  const panel = el("div", undefined, "renames");
+  panel.id = "renames";
+  panel.popover = "auto";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", "Renamed labels");
+  toggle.popoverTargetElement = panel;
+  const head = el("div", undefined, "renames-head");
+  const close = el("button", "Close", "renames-close");
+  close.type = "button";
+  close.popoverTargetElement = panel;
+  close.popoverTargetAction = "hide";
+  head.append(el("strong", "Renamed labels"), close);
+  const body = el("div", undefined, "renames-body");
+  body.tabIndex = 0;
+  body.setAttribute("role", "group");
+  body.setAttribute("aria-label", "Renamed sheet and net labels");
+  body.append(
+    el(
+      "p",
+      "Sheets match by sheet UUID. Nets match by identical pin membership. Neither counts as a rewire.",
+      "renames-note",
+    ),
+  );
+  for (const [kind, heading, renames] of [
+    ["Sheet", "Sheets", sheetLabels],
+    ["Net", "Nets", netLabels],
+  ]) {
+    if (!renames.length) continue;
+    const title = el("h3", heading);
+    title.append(el("span", renames.length));
+    const list = el("ul");
+    for (const rename of renames) {
+      const row = el("li");
+      row.dataset.kind = kind;
+      row.title = rename.file;
+      row.append(
+        el("span", rename.before, "before"),
+        el("span", "→", "arrow"),
+        el("span", rename.after, "after"),
+      );
+      if (report.boards.length > 1)
+        row.append(el("small", shortFile(rename.file)));
+      list.append(row);
+    }
+    body.append(title, list);
+  }
+  panel.append(head, body);
+  const place = () => {
+    const anchor = toggle.getBoundingClientRect(),
+      edge = 12,
+      width = Math.min(520, innerWidth - edge * 2),
+      top = $("revision").closest("header").getBoundingClientRect().bottom + 6;
+    Object.assign(panel.style, {
+      width: `${width}px`,
+      left: `${Math.max(edge, Math.min(anchor.left, innerWidth - width - edge))}px`,
+      top: `${top}px`,
+      maxHeight: `${Math.min(440, innerHeight - top - edge)}px`,
+    });
+  };
+  panel.addEventListener("beforetoggle", (event) => {
+    toggle.setAttribute("aria-expanded", event.newState === "open");
+    if (event.newState === "open") place();
+  });
+  panel.addEventListener("toggle", (event) => {
+    if (event.newState === "open") body.scrollTop = 0;
+  });
+  window.addEventListener("resize", () => {
+    if (panel.matches(":popover-open")) place();
+  });
+  $("revision").after(toggle, panel);
+}
 async function init() {
   try {
     const response = await fetch("/api/report");
@@ -1305,26 +1395,7 @@ async function init() {
         : `${report.boards.length} boards · ${report.boards.map(shortFile).join(" / ")}`;
     $("project").title = report.boards.join("\n");
     $("change-count").textContent = report.stats.changed;
-    const sheetLabels = report.sheetRenames ?? [],
-      netLabels = report.netRenames ?? [];
-    if (sheetLabels.length || netLabels.length) {
-      const details = el("details", undefined, "sheet-renames");
-      const counts = [];
-      if (sheetLabels.length) counts.push(`${sheetLabels.length} sheet`);
-      if (netLabels.length) counts.push(`${netLabels.length} net`);
-      details.append(
-        el("summary", `${counts.join(" · ")} ${sheetLabels.length + netLabels.length === 1 ? "label" : "labels"} renamed`),
-      );
-      const list = el("ul");
-      for (const [kind, renames] of [["Sheet", sheetLabels], ["Net", netLabels]])
-        for (const rename of renames) {
-          const row = el("li", `${kind}: ${rename.before} → ${rename.after}`);
-          row.title = rename.file;
-          list.append(row);
-        }
-      details.append(list);
-      $("project").after(details);
-    }
+    renameDisclosure(report.sheetRenames ?? [], report.netRenames ?? []);
     for (const [key, label] of [
       ["parts", "parts"],
       ["nets", "head nets"],
@@ -1415,6 +1486,8 @@ async function init() {
     });
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
+      // The open rename panel takes this Escape. The review underneath stays put.
+      if ($("renames")?.matches(":popover-open")) return;
       if (state.selected) closeDiff();
       else resetImpact();
     });
