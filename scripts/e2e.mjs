@@ -149,11 +149,45 @@ try {
     ...(report.sheetRenames ?? []).map((r) => `Sheet: ${r.before} → ${r.after}`),
     ...(report.netRenames ?? []).map((r) => `Net: ${r.before} → ${r.after}`),
   ];
+  const renameRows = (surface) =>
+    surface.locator("#renames li").evaluateAll((rows) =>
+      rows.map((row) =>
+        `${row.dataset.kind}: ${row.querySelector(".before").textContent} → ${row.querySelector(".after").textContent}`,
+      ),
+    );
   if (renamedLabels.length) {
-    await page.locator(".sheet-renames summary").click();
-    assert.deepEqual(await page.locator(".sheet-renames li").allTextContents(), renamedLabels,
+    const toggle = page.locator("#renames-toggle"),
+      panel = page.locator("#renames");
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+    await toggle.click();
+    assert.deepEqual(await renameRows(page), renamedLabels,
       "the disclosure names every proved sheet and net label rename");
-    await page.locator(".sheet-renames summary").click();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+    const header = await page.locator("header").boundingBox(),
+      opened = await panel.boundingBox();
+    assert.ok(opened.y >= header.y + header.height,
+      "the rename panel opens below the header and leaves the revision readable");
+    await page.keyboard.press("Escape");
+    // The panel fades out, so each dismissal waits for the hidden state.
+    await panel.waitFor({ state: "hidden" });
+    assert.ok(await toggle.evaluate((node) => node === document.activeElement),
+      "Escape leaves focus on the rename control");
+    await toggle.click();
+    await page.locator("footer").click();
+    await panel.waitFor({ state: "hidden" });
+    await toggle.click();
+    await panel.locator(".renames-close").click();
+    await panel.waitFor({ state: "hidden" });
+    await page.locator(".tile").first().click();
+    await toggle.click();
+    await page.keyboard.press("Escape");
+    await panel.waitFor({ state: "hidden" });
+    assert.ok(await page.locator("#diff-panel").isVisible(),
+      "Escape closes only the rename panel, not the inspection beneath it");
+    // Start the remaining checks from a fresh page, without a returned-part mark.
+    await page.reload();
+    await page.locator(".tile").first().waitFor();
+    await page.evaluate(() => document.fonts.ready);
   }
   await page.locator(".tile .ref").evaluateAll((labels) => {
     for (const label of labels) {
@@ -985,13 +1019,15 @@ try {
   for (const width of [720, 800, 390]) {
     await page.setViewportSize({ width, height: 844 });
     if (report.sheetRenames?.length || report.netRenames?.length) {
-      await page.locator(".sheet-renames summary").click();
-      const bounds = await page.locator(".sheet-renames ul").boundingBox();
+      await page.locator("#renames-toggle").click();
+      const bounds = await page.locator("#renames").boundingBox();
       assert.ok(
-        bounds.x >= 0 && bounds.x + bounds.width <= width,
-        "label rename popover stays inside the viewport",
+        bounds.x >= 0 && bounds.x + bounds.width <= width &&
+          bounds.y >= 0 && bounds.y + bounds.height <= 844,
+        "label rename panel stays inside the viewport",
       );
-      await page.locator(".sheet-renames summary").click();
+      await page.keyboard.press("Escape");
+      await page.locator("#renames").waitFor({ state: "hidden" });
     }
     assert.ok(
       await page.evaluate(
@@ -1038,6 +1074,20 @@ try {
   };
   await touchTile.waitFor();
   await touchCapture("touch-map");
+  if (renamedLabels.length) {
+    const pill = await touchPage.locator("#renames-toggle").boundingBox();
+    for (const offset of [-20, 20]) {
+      await touchPage.touchscreen.tap(pill.x + pill.width / 2, pill.y + pill.height / 2 + offset);
+      assert.ok(await touchPage.locator("#renames").isVisible(),
+        "the rename control accepts touches across a 44px tall target");
+      await touchPage.locator(".renames-close").tap();
+      await touchPage.locator("#renames").waitFor({ state: "hidden" });
+    }
+    await touchPage.locator("#renames-toggle").tap();
+    await touchCapture("touch-renames");
+    await touchPage.locator("#stats .parts").tap();
+    await touchPage.locator("#renames").waitFor({ state: "hidden" });
+  }
   const tapSamePoint = async () => {
     await touchTile.scrollIntoViewIfNeeded();
     const box = await touchTile.boundingBox();
@@ -1354,6 +1404,11 @@ try {
         after: "frontend",
       },
     ];
+    presentationReport.netRenames = Array.from({ length: 60 }, (_, i) => ({
+      file: removed.file,
+      before: `/Microcontroller, CPLD, USB, Power/LEGACY_SIGNAL_${i}`,
+      after: `Net-(U${i}-Pad${i})`,
+    }));
     const proof = await browser.newPage({
       viewport: { width: 1440, height: 900 },
     });
@@ -1362,6 +1417,25 @@ try {
       route.fulfill({ json: presentationReport }),
     );
     await proof.goto(`http://127.0.0.1:${server.address().port}`);
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 600 }]) {
+      await proof.setViewportSize(viewport);
+      await proof.locator("#renames-toggle").click();
+      const long = await proof.locator("#renames").boundingBox();
+      assert.ok(long.y >= 0 && long.y + long.height <= viewport.height &&
+          long.x >= 0 && long.x + long.width <= viewport.width,
+        "a long rename list stays inside the viewport");
+      assert.ok(await proof.locator(".renames-body").evaluate((node) =>
+        node.scrollHeight > node.clientHeight), "a long rename list scrolls inside its panel");
+      assert.ok(await proof.locator(".renames-close").isVisible(),
+        "the close control stays visible above a long rename list");
+      await proof.locator("#renames li").last().scrollIntoViewIfNeeded();
+      const last = await proof.locator("#renames li").last().boundingBox();
+      assert.ok(last.y + last.height <= long.y + long.height + 1,
+        "the last rename is reachable by scrolling the panel");
+      await proof.keyboard.press("Escape");
+      await proof.locator("#renames").waitFor({ state: "hidden" });
+    }
+    await proof.setViewportSize({ width: 1440, height: 900 });
     await proof
       .locator(`.part-row[data-id=${JSON.stringify(subject.id)}]`)
       .press("Enter");
