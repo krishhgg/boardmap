@@ -1052,6 +1052,8 @@ try {
   await page.locator("#search").fill(candidate.ref);
   assert.ok((await page.locator(".tile").count()) < report.parts.length);
   if (report.stats.changed) {
+    // Pick the reference from the unfiltered list, so a changed part is always found.
+    await page.locator("#search").fill("");
     const first = await page.locator(".part-row").first().getAttribute("data-id");
     const sought = report.parts.find((p) => p.id === first);
     await page.locator("#search").fill(sought.ref);
