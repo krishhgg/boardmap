@@ -14,7 +14,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `map/hackrf/map-reach.png`, `map/corne/map-reach.png` | 1440 × 900 | Hovering U17 or ZD1 draws curves that leave and meet tiles square to their edges. Neighbors connected only in head are green, neighbors connected only in base are dashed pink, and neighbors connected in both stay blue. Curves fade under part names and pass behind sheet headers, and a dot marks where each one leaves the traced part. On HackRF U17, the VCC and VAA rail loads are tinted without curves. |
 | `map/hackrf/hub-reach.png` | 1440 × 900 | U23 has 205 neighbors. Curves are drawn for its changed connections only, and neighbors whose connection did not change are tinted without a ring. |
 | `map/corne/hub-reach.png` | 1440 × 900 | Corne U1 would draw 41 curves, so it is traced as a hub: its 2 changed links are drawn and the rest of its neighbors are tinted. |
-| `map/hackrf/sheet-reach-detail.png` | 2× crop | U17 inside baseband. Dots mark where its 5 changed links leave it, and the curves stay faintly visible under U18's name. |
+| `map/hackrf/sheet-reach-detail.png` | 2× crop | U17 inside baseband. Its 5 changed links start at dots inside U17, and the curves stay faintly visible under U18's name. |
 | `map/hackrf/rail-reach.png` | 1440 × 900 | R38 joined VCC. Its 62 rail-only neighbors are tinted, and rings and curves mark the three parts it reaches through small nets. A halo marks the traced part. |
 | `map/hackrf/sheet.png`, `map/hackrf/sheet-reach.png`, `map/corne/sheet.png`, `map/corne/sheet-reach.png` | 1440 × 900 | A drilled sheet, idle and traced. |
 | `map/hackrf/phone-idle.png`, `map/hackrf/phone-preview.png` | 390 × 844 | The phone readout keeps one height. Idle, it holds the instruction and the key. After a tap, it holds the trace with the Open diff action beside the part name. Reach, ground and the view switch share one row, so the map starts in the upper half of the screen. |
@@ -25,6 +25,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `board/hackrf/board-reach.png`, `board/corne/board-reach.png` | 1440 × 900 | A trace in Board layout. |
 | `board/hackrf/board-phone-nearby.png` | 390 × 844 | A tap 7 pixels off C159 previews it and lists the changes within 30 pixels as full-size buttons under the board. |
 | `board/hackrf/board-phone-label-tap.png`, `board/corne/board-phone-label-tap.png` | 390 × 844 | Tapping the name "U18" or "J2" previews that part, not whatever marker sits under the name. |
+| `board/corne/board-phone-cluster.png` | 390 px wide, 2× | On the phone, every changed part in Corne's two clusters has its own name. A name that had to move out of the cluster is tied to its marker by a thin line. |
 | `board/corne/board-cluster.png` | 2× crop of `board.png` | F1, R8, R9 and ZD1 sit within 20 pixels on the real board. Their markers are spread apart and each has its own label. |
 | `board/hackrf/board-phone.png`, `board/corne/board-phone.png` | 390 × 844 | The same view on a phone. The canvas takes the board's shape, so Corne's wide board is not left in a strip of empty canvas. |
 | `polish/corne-map.png` | 1440 × 900 | The Metadata legend swatch matches the metadata tiles, and the narrow Root sheet header shows its whole name. |
@@ -32,7 +33,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `layout/phone-diff.png` | 390 × 844 | A part diff on a phone. |
 | `layout/phone-tiny-part.png` | 390 × 844 | Corne ZD1 is a sliver in the phone overview. One tap opens its sheet with ZD1 previewed and scrolled into view. |
 
-Every capture in this gallery was retaken after the layout change that moved the breadcrumb into the toolbar and the footer under the change list. They were retaken again after the round 2, 3 and 4 changes. At 1440 × 900 the map is now 654 pixels tall, up from 545 before this pass.
+Every capture in this gallery was retaken after the layout change that moved the breadcrumb into the toolbar and the footer under the change list. They were retaken again after the changes from each later council round. At 1440 × 900 the map is now 654 pixels tall, up from 545 before this pass.
 
 Recordings of drill-in, drill-out and curve motion are on the `pr-assets` branch, outside the installed package and the main history.
 
