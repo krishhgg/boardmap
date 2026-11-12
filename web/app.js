@@ -623,6 +623,25 @@ function buildMap(restore) {
   const sheetItems = shown.map((p) => ({ p, weight: weight(p) }))
     .sort((a, b) => b.weight - a.weight);
   $("canvas").style.minHeight = "";
+  $("canvas").style.flex = "";
+  $("canvas").style.height = "";
+  // On a phone, a wide board gets a canvas of its own shape instead of empty bands.
+  if (
+    state.view === "board" &&
+    shown.length &&
+    matchMedia("(max-width: 700px)").matches &&
+    new Set(shown.map((p) => p.file)).size === 1
+  ) {
+    const { minX, minY, maxX, maxY } = boardBoxes(shown),
+      width = $("canvas").getBoundingClientRect().width,
+      fit =
+        ((maxY - minY) * (width - 32)) / Math.max(1, maxX - minX) + 72;
+    if (fit < 380) {
+      $("canvas").style.flex = "none";
+      $("canvas").style.minHeight = "0";
+      $("canvas").style.height = `${Math.max(200, Math.ceil(fit))}px`;
+    }
+  }
   if (state.view === "map" && state.scope?.sheet) {
     const box = $("canvas").getBoundingClientRect();
     const phone = matchMedia("(max-width: 700px)").matches;
@@ -742,21 +761,8 @@ function buildMap(restore) {
     w < 500 ? 112 : 90,
   );
 }
-function renderBoard(shown, w, h) {
-  const files = [...new Set(shown.map((p) => p.file))];
-  if (files.length > 1) {
-    const chooser = el("div", undefined, "board-chooser");
-    chooser.append(el("p", "Choose a board to view its physical layout."));
-    for (const file of files) {
-      const button = el("button", file);
-      button.dataset.focusKey = `board:${file}`;
-      button.onclick = () => setScope({ file });
-      chooser.append(button);
-    }
-    $("tiles").append(chooser);
-    return;
-  }
-  // Each marker is the footprint's own outline from its pads, so the view reads as a board.
+// Each footprint's box in board millimeters, and the bounds of them all.
+function boardBoxes(shown) {
   const boxes = new Map();
   let minX = Infinity,
     minY = Infinity,
@@ -776,6 +782,24 @@ function renderBoard(shown, w, h) {
     maxX = Math.max(maxX, box.x + box.w);
     maxY = Math.max(maxY, box.y + box.h);
   }
+  return { boxes, minX, minY, maxX, maxY };
+}
+function renderBoard(shown, w, h) {
+  const files = [...new Set(shown.map((p) => p.file))];
+  if (files.length > 1) {
+    const chooser = el("div", undefined, "board-chooser");
+    chooser.append(el("p", "Choose a board to view its physical layout."));
+    for (const file of files) {
+      const button = el("button", file);
+      button.dataset.focusKey = `board:${file}`;
+      button.onclick = () => setScope({ file });
+      chooser.append(button);
+    }
+    $("tiles").append(chooser);
+    return;
+  }
+  // Each marker is the footprint's own outline from its pads, so the view reads as a board.
+  const { boxes, minX, minY, maxX, maxY } = boardBoxes(shown);
   const margin = w < 500 ? 16 : 28,
     scale = Math.min(
       (w - margin * 2) / Math.max(1, maxX - minX),
@@ -831,6 +855,19 @@ function renderBoard(shown, w, h) {
         box.y < r.y + r.h &&
         box.y + box.h > r.y,
     );
+  // A label never covers a reference drawn inside another marker.
+  const canvasBox = $("canvas").getBoundingClientRect(),
+    inked = document.createRange();
+  for (const name of $("tiles").querySelectorAll(".tile .ref")) {
+    inked.selectNodeContents(name);
+    const box = inked.getBoundingClientRect();
+    placed.push({
+      x: box.x - canvasBox.x - 2,
+      y: box.y - canvasBox.y - 1,
+      w: box.width + 4,
+      h: box.height + 2,
+    });
+  }
   textMetrics.font = `500 10px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
   for (const p of shown.filter(isElectrical).sort(reviewOrder)) {
     const marker = $("tiles").querySelector(

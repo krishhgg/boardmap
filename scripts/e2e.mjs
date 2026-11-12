@@ -1238,6 +1238,27 @@ try {
     assert.ok(await page.locator("#map-scale-note").isVisible(),
       `the board view states its limits at ${width}px`);
   }
+  // On a phone the canvas takes the board's shape, and labels stay off names drawn in markers.
+  await page.evaluate(() =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const phoneBoard = await page.evaluate(() => {
+    const frame = document.querySelector(".board-frame").getBoundingClientRect(),
+      canvas = document.getElementById("canvas").getBoundingClientRect();
+    const range = document.createRange();
+    const names = [...document.querySelectorAll("#tiles .tile .ref")].map((name) => {
+      range.selectNodeContents(name);
+      return range.getBoundingClientRect();
+    });
+    const covered = [...document.querySelectorAll(".board-label")].filter((label) => {
+      const box = label.getBoundingClientRect();
+      return names.some((name) => box.left < name.right && box.right > name.left &&
+        box.top < name.bottom && box.bottom > name.top);
+    }).length;
+    return { slack: canvas.height - frame.height, height: canvas.height, covered };
+  });
+  assert.ok(phoneBoard.slack <= 190 || phoneBoard.height <= 200,
+    `the phone board canvas follows the board's shape: ${JSON.stringify(phoneBoard)}`);
+  assert.equal(phoneBoard.covered, 0, "no label covers a reference drawn inside a marker");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
