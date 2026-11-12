@@ -598,6 +598,15 @@ try {
       tiles.every((tile) => getComputedStyle(tile).boxShadow === "none")),
       "an unchanged connection on a hub trace has no ring");
   }
+  // A neighbor reached only through a rail is tinted without a ring.
+  assert.deepEqual(
+    await page.locator(".tile.railed").evaluateAll((nodes) => nodes.map((node) => node.dataset.id).sort()),
+    railed ? direct.ids.filter((id) => !drawn(id)).sort() : [],
+    "rail-only neighbors, and only those, give up their ring");
+  if (await page.locator("#connections path").count() <= 40)
+    assert.equal(await page.locator("#connections .link-start").count(),
+      await page.locator("#connections path").count(),
+      "each curve has a dot where it leaves the traced part");
   assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
     "rails shown without curves are marked in the net list");
   if (railed)
@@ -1639,6 +1648,43 @@ try {
       await touchPage.touchscreen.tap(miss.x, miss.y);
       assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), miss.id,
         "a second near touch inspects it");
+      await touchPage.locator(".close-diff").tap();
+      await touchPage.keyboard.press("Escape");
+    }
+    // A tap in a cluster lists the changes around it as full-size buttons.
+    const cluster = await touchPage.locator(".tile[data-enlarged]").evaluateAll((tiles) => {
+      const boxes = tiles.map((tile) => tile.getBoundingClientRect());
+      for (const [index, box] of boxes.entries()) {
+        const x = box.left + box.width / 2, y = box.top + box.height / 2;
+        const close = boxes.filter((other) => Math.hypot(
+          Math.max(other.left - x, 0, x - other.right), Math.max(other.top - y, 0, y - other.bottom)) <= 30);
+        if (close.length >= 2 && document.elementFromPoint(x, y) === tiles[index])
+          return { id: tiles[index].dataset.id, x, y };
+      }
+      return null;
+    });
+    assert.ok(await touchPage.locator("#nearby").isVisible(),
+      "the touch board view reserves a strip for nearby changes");
+    if (cluster) {
+      const strip = await touchPage.locator("#nearby").boundingBox();
+      await touchPage.touchscreen.tap(cluster.x, cluster.y);
+      const picks = touchPage.locator("#nearby button");
+      await picks.first().waitFor();
+      assert.ok((await picks.count()) >= 2, "a tap in a cluster lists the changes around it");
+      assert.equal(await picks.first().getAttribute("data-id"), cluster.id,
+        "the tapped change leads the nearby list");
+      assert.ok(await picks.evaluateAll((buttons) =>
+        buttons.every((button) => button.getBoundingClientRect().height >= 44)),
+        "nearby changes are full-size touch targets");
+      assert.equal((await touchPage.locator("#nearby").boundingBox()).y, strip.y,
+        "listing nearby changes does not move the board");
+      const second = await picks.nth(1).getAttribute("data-id");
+      await picks.nth(1).tap();
+      assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), second,
+        "choosing a nearby change previews it");
+      await picks.nth(1).tap();
+      assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), second,
+        "choosing it again inspects it");
       await touchPage.locator(".close-diff").tap();
       await touchPage.keyboard.press("Escape");
     }
