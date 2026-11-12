@@ -1426,6 +1426,28 @@ footer {
   white-space: pre-wrap;
   font-size: 11px;
 }
+.pad-facts {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 0;
+  font: 11px/1.5 var(--mono);
+}
+.pad-facts + .pad-facts {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.pad-facts dt {
+  color: var(--faint);
+}
+.pad-facts dd {
+  margin: 0;
+  color: var(--muted);
+}
+.pad-facts dd.changed {
+  color: inherit;
+}
 .geometry-details summary {
   cursor: pointer;
   padding: 12px 0;
@@ -1720,6 +1742,13 @@ footer {
   .semantic td:first-child,
   .semantic th:first-child {
     width: 32%;
+  }
+  .pad-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .pad-facts dd {
+    margin-bottom: 4px;
   }
   .diff-header {
     padding: 12px 0;

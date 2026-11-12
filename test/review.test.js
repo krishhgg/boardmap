@@ -12,6 +12,8 @@ import {
   changedMechanicalPads,
   propertyPriority,
   propertyReasons,
+  padFacts,
+  padBundles,
 } from "../web/review.js";
 const part = (changes = [], extra = {}) => ({
   status: "modified",
@@ -225,4 +227,29 @@ test("population transitions and both-present part identifiers outrank descripti
       changeGroup(part([{ field: "fields", before, after }])),
       "Metadata",
     );
+});
+
+test("pad geometry reads as named properties and repeated pads share one description", () => {
+  const paste = (x, y) => ({
+    number: "", type: "smd", shape: "roundrect", x, y, angle: 0, w: 1.1, h: 1.1,
+    drill: [], layers: ["F.Paste"], geometry: [["roundrect_rratio", "0.25"]],
+  });
+  assert.deepEqual(padFacts(paste(0, 0)), [
+    ["Pad", "SMD roundrect"],
+    ["Size", "1.1 × 1.1 mm"],
+    ["Rotation", "0°"],
+    ["Drill", "None"],
+    ["Layers", "F.Paste"],
+    ["Corner ratio", "0.25"],
+  ]);
+  const hole = {
+    number: "1", type: "thru_hole", shape: "oval", x: 1, y: 2, angle: 90, w: 2, h: 3,
+    drill: ["oval", "0.8", "1.2", ["offset", "0.1", "0"]], layers: ["*.Cu", "*.Mask"], geometry: [],
+  };
+  assert.deepEqual(padFacts(hole)[3], ["Drill", "oval 0.8 × 1.2 mm, offset 0.1, 0 mm"]);
+  const bundles = padBundles([paste(-1, -1), paste(1, 1), hole, paste(1, -1)]);
+  assert.equal(bundles.length, 2);
+  assert.deepEqual(bundles[0].at, ["-1, -1", "1, 1", "1, -1"]);
+  assert.deepEqual(bundles[1].at, ["1, 2"]);
+  assert.deepEqual(padBundles(), []);
 });

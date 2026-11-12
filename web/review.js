@@ -210,3 +210,40 @@ export const rankedNetReach = (report, part, result, transitive = false) =>
     name,
     count: ids.length,
   }));
+
+// Named pad properties in reading order, with units.
+export function padFacts(pad) {
+  const kind =
+    { smd: "SMD", thru_hole: "Through-hole", np_thru_hole: "Unplated hole", connect: "Edge connector" }[
+      pad.type
+    ] ?? pad.type;
+  const drill = pad.drill ?? [];
+  const oval = drill[0] === "oval";
+  const offset = drill.find((n) => Array.isArray(n) && n[0] === "offset");
+  const hole = !drill.length
+    ? "None"
+    : `${oval ? `oval ${drill[1]} × ${drill[2]}` : drill[0]} mm${offset ? `, offset ${offset[1]}, ${offset[2]} mm` : ""}`;
+  return [
+    ["Pad", `${kind} ${pad.shape}`],
+    ["Size", `${pad.w} × ${pad.h} mm`],
+    ["Rotation", `${pad.angle}°`],
+    ["Drill", hole],
+    ["Layers", pad.layers.join(", ")],
+    ...pad.geometry.map((entry) =>
+      entry[0] === "roundrect_rratio"
+        ? ["Corner ratio", String(entry[1])]
+        : [String(entry[0]), JSON.stringify(entry.slice(1))],
+    ),
+  ];
+}
+// Pads that differ only in position share one description and list their positions.
+export function padBundles(pads = []) {
+  const bundles = new Map();
+  for (const pad of pads) {
+    const facts = padFacts(pad),
+      key = JSON.stringify(facts);
+    if (!bundles.has(key)) bundles.set(key, { facts, at: [] });
+    bundles.get(key).at.push(`${pad.x}, ${pad.y}`);
+  }
+  return [...bundles.values()];
+}

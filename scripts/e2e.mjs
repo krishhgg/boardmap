@@ -793,17 +793,20 @@ try {
     await page.locator(".geometry-details summary").click();
     const pad = page.locator(".semantic tr").filter({
       has: page.getByRole("cell", {
-        name: "Pad 2 local geometry",
+        name: "Pad 2",
         exact: true,
       }),
     });
-    const cells = await pad.locator("td").allTextContents();
-    assert.match(cells[1], /drill \["0\.8"\]/);
-    assert.match(cells[2], /drill \["1\.2"\]/);
+    const changedFacts = (side) =>
+      pad.locator(`td:nth-child(${side}) dd.changed`).allTextContents();
+    assert.deepEqual(await changedFacts(2), ["0.8 mm"],
+      "only the drill that changed is emphasized in base");
+    assert.deepEqual(await changedFacts(3), ["1.2 mm"],
+      "only the drill that changed is emphasized in head");
+    assert.match(await pad.locator("td").nth(1).innerText(), /Size\s+2 × 2 mm/,
+      "pad geometry reads as named properties with units");
     assert.equal(
-      await page
-        .getByRole("cell", { name: "Pad 1 local geometry", exact: true })
-        .count(),
+      await page.getByRole("cell", { name: "Pad 1", exact: true }).count(),
       0,
     );
   }

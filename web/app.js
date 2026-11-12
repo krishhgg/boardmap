@@ -8,6 +8,7 @@ import {
   changeGroup,
   isElectrical,
   padGroups,
+  padBundles,
   changedPadNumbers,
   changedMechanicalPads,
   rankedNetReach,
@@ -1099,23 +1100,60 @@ function openDiff(p, origin) {
       } else if (c.field === "pads") {
         const a = padGroups(c.before),
           b = padGroups(c.after);
-        const describe = (pads) =>
-          pads
-            ?.map(
-              (pad) =>
-                `${pad.type} ${pad.shape}; ${pad.w} × ${pad.h} mm; at ${pad.x}, ${pad.y}; ${pad.angle}°; drill ${JSON.stringify(pad.drill)}; layers ${pad.layers.join(", ")}${pad.geometry.length ? `; shape ${JSON.stringify(pad.geometry)}` : ""}`,
-            )
-            .join("\n\n");
+        // Name each pad property. Only values that differ carry revision color.
+        const cell = (pads, other) => {
+          const td = el("td");
+          if (!pads?.length) {
+            td.className = "absent";
+            td.append(el("code", "∅"));
+            return td;
+          }
+          const mine = padBundles(pads),
+            theirs = padBundles(other);
+          mine.forEach((bundle, index) => {
+            const match = theirs.length === mine.length ? theirs[index] : null;
+            const facts = el("dl", undefined, "pad-facts");
+            const fact = (label, value, changed) => {
+              const dd = el("dd", value, changed ? "changed" : undefined);
+              facts.append(el("dt", label), dd);
+              return dd;
+            };
+            if (bundle.at.length > 1)
+              fact(
+                "Count",
+                `${bundle.at.length} pads`,
+                !match || match.at.length !== bundle.at.length,
+              );
+            for (const [label, value] of bundle.facts)
+              fact(
+                label,
+                value,
+                !match || match.facts.find((f) => f[0] === label)?.[1] !== value,
+              );
+            const shown = bundle.at.slice(0, 6).join(" · ");
+            fact(
+              "At, mm",
+              bundle.at.length > 6
+                ? `${shown} · +${bundle.at.length - 6} more`
+                : shown,
+              !match || match.at.join() !== bundle.at.join(),
+            ).title = bundle.at.join("\n");
+            td.append(facts);
+          });
+          return td;
+        };
         for (const number of [...new Set([...a.keys(), ...b.keys()])].sort(
           (a, b) => a.localeCompare(b, undefined, { numeric: true }),
         )) {
-          if (JSON.stringify(a.get(number)) !== JSON.stringify(b.get(number)))
-            row(
-              `Pad ${number || "mechanical"} local geometry`,
-              describe(a.get(number)),
-              describe(b.get(number)),
-              geometryTable,
-            );
+          if (JSON.stringify(a.get(number)) === JSON.stringify(b.get(number)))
+            continue;
+          const tr = el("tr");
+          tr.append(
+            el("td", number ? `Pad ${number}` : "Unnumbered pads"),
+            cell(a.get(number), b.get(number)),
+            cell(b.get(number), a.get(number)),
+          );
+          geometryTable.append(tr);
         }
       } else if (c.field === "fields") {
         for (const key of [
@@ -1177,7 +1215,7 @@ function openDiff(p, origin) {
     details.append(
       el(
         "summary",
-        `Changed pad geometry · ${geometryTable.rows.length - 1} ${geometryTable.rows.length === 2 ? "pad group" : "pad groups"}`,
+        `Changed pad geometry · ${geometryTable.rows.length - 1} ${geometryTable.rows.length === 2 ? "pad group" : "pad groups"} · positions relative to the footprint`,
       ),
       scroller,
     );
