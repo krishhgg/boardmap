@@ -342,3 +342,18 @@ test("overlapping markers are nudged apart without straying from their parts", (
   const same = spread([{ x: 5, y: 5, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 }]);
   assert.ok(same[0].x !== same[1].x || same[0].y !== same[1].y, "coincident markers separate");
 });
+
+test("spreading keeps markers inside the canvas and stays fast on a dense board", () => {
+  const bounds = { x: 2, y: 2, w: 196, h: 196 };
+  const edge = spread(
+    Array.from({ length: 12 }, (_, i) => ({ x: 2 + (i % 3), y: 2 + (i % 2), w: 11, h: 11 })),
+    { bounds },
+  );
+  assert.ok(edge.every((r) => r.x >= 2 && r.y >= 2 && r.x + r.w <= 198 && r.y + r.h <= 198));
+  const dense = Array.from({ length: 4000 }, (_, i) => ({
+    x: 10 + (i % 80) * 4, y: 10 + Math.floor(i / 80) * 4, w: 11, h: 11,
+  }));
+  const began = performance.now();
+  spread(dense, { bounds: { x: 2, y: 2, w: 400, h: 400 } });
+  assert.ok(performance.now() - began < 1000, "4,000 markers spread in well under a second");
+});

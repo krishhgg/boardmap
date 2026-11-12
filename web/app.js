@@ -836,17 +836,23 @@ function renderBoard(shown, w, h) {
   }
   // Small electrical changes drawn at their minimum size can land on top of each other.
   // Those enlarged markers are nudged apart so each one can be seen and picked.
+  // A long connector that is only thin stays in size order, below the parts inside it.
+  const floor = w < 500 ? 11 : 14;
   const enlarged = new Set(
     shown
       .filter(
         (p) =>
           isElectrical(p) &&
           (boxes.get(p.id).w * scale < rects.get(p.id).w ||
-            boxes.get(p.id).h * scale < rects.get(p.id).h),
+            boxes.get(p.id).h * scale < rects.get(p.id).h) &&
+          Math.max(rects.get(p.id).w, rects.get(p.id).h) <= floor * 2,
       )
       .map((p) => p.id),
   );
-  spread([...enlarged].map((id) => rects.get(id)));
+  spread(
+    [...enlarged].map((id) => rects.get(id)),
+    { bounds: { x: 2, y: 2, w: w - 4, h: h - 4 } },
+  );
   // Larger markers go down first, so a part inside another footprint stays on top and
   // selectable. Enlarged changes go last, so a neighbor's marker never hides one. Hover
   // does not raise a marker, which keeps that order under the pointer.
