@@ -917,7 +917,9 @@ function highlight(id) {
   }
   const curves = svgEl("g", { mask: "url(#label-mask)" });
   svg.append(mask, curves);
-  const kept = edges.filter((edge) => !changed(edge)).length;
+  const kept = edges.filter(
+    (edge) => edge.source !== id || !changed(edge),
+  ).length;
   for (const edge of edges) {
     const ca = centers.get(edge.source),
       cb = centers.get(edge.target);
@@ -927,11 +929,16 @@ function highlight(id) {
       back = normal(cb, ca),
       pull = Math.max(10, Math.min(140, Math.hypot(b.x - a.x, b.y - a.y) * 0.45));
     const d = `M ${a.x} ${a.y} C ${a.x + out.x * pull} ${a.y + out.y * pull}, ${b.x + back.x * pull} ${b.y + back.y * pull}, ${b.x} ${b.y}`;
-    const kind = gained.has(edge.target)
-      ? " gained"
-      : lost.has(edge.target)
-        ? " lost"
-        : "";
+    // Only a curve from the traced part is known to belong to one revision. Farther hops
+    // of a transitive walk mix base and head links, so those curves stay neutral.
+    const kind =
+      edge.source !== id
+        ? ""
+        : gained.has(edge.target)
+          ? " gained"
+          : lost.has(edge.target)
+            ? " lost"
+            : "";
     const path = svgEl("path", {
       d,
       class: `link${kind}`,

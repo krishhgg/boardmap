@@ -686,6 +686,12 @@ try {
     await page.locator("#impact").innerText(),
     /transitively reachable/,
   );
+  const farLinks = changedLinks(report, candidate.id, { transitive: true }),
+    nearIds = new Set(reach(report, candidate.id).ids);
+  assert.ok(
+    (await page.locator("#connections path:is(.gained, .lost)").count()) <=
+      [...farLinks.gained, ...farLinks.lost].filter((id) => nearIds.has(id)).length,
+    "in a transitive trace only curves from the traced part carry revision color");
   await page.locator("#ground").check();
   await hoverPart(tile);
   assert.match(await page.locator("#impact").innerText(), /Ground included/);
