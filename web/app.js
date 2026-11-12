@@ -10,6 +10,7 @@ import {
   padGroups,
   padBundles,
   pairBundles,
+  footprintExtent,
   changedPadNumbers,
   changedMechanicalPads,
   rankedNetReach,
@@ -515,7 +516,7 @@ function referenceLayout(ref, r) {
   }
   return { fontSize, horizontalPadding, verticalPadding };
 }
-function tile(p, r, parent) {
+function tile(p, r, parent, gap) {
   const kind = changeGroup(p);
   const node = el(
     "button",
@@ -524,7 +525,7 @@ function tile(p, r, parent) {
   );
   node.dataset.id = p.id;
   node.dataset.focusKey = `part:${p.id}`;
-  position(node, r);
+  position(node, r, gap);
   const rewired = changedPins(p).length;
   node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}`);
   node.title = `${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
@@ -534,6 +535,12 @@ function tile(p, r, parent) {
     const label = el("span", p.ref, "ref");
     label.style.fontSize = `${fontSize}px`;
     node.append(label);
+  }
+  // A board marker carries only its reference. Value and pad count stay in the map.
+  if (state.view === "board") {
+    wirePart(node, p);
+    parent.append(node);
+    return;
   }
   if (r.w > 65 && r.h > 48)
     node.append(el("span", p.value || p.footprint, "value"));
@@ -555,10 +562,11 @@ function renderMap(restore) {
 function buildMap(restore) {
   $("map-scale-note").textContent =
     state.view === "board"
-      ? "Footprint centers · markers not to scale"
+      ? "Footprint outlines from pad extents · small parts enlarged · no copper or board edge"
       : "Area weighted by numbered pads, minimum 3 · grouped by board / sheet";
   const root = $("tiles");
   root.replaceChildren();
+  root.classList.toggle("board", state.view === "board");
   $("connections").replaceChildren();
   const shown = report.parts.filter((p) => inScope(p) && matches(p));
   $("impact").classList.toggle("sheet-scope", Boolean(state.scope?.sheet));
@@ -701,38 +709,103 @@ function renderBoard(shown, w, h) {
     $("tiles").append(chooser);
     return;
   }
-  const xs = shown.map((p) => p.x),
-    ys = shown.map((p) => p.y),
-    minX = Math.min(...xs),
-    minY = Math.min(...ys),
-    maxX = Math.max(...xs),
-    maxY = Math.max(...ys);
-  const scale = Math.min(
-    (w - 55) / Math.max(1, maxX - minX),
-    (h - 55) / Math.max(1, maxY - minY),
-  );
-  const ox = (w - (maxX - minX) * scale) / 2,
-    oy = (h - (maxY - minY) * scale) / 2;
+  // Each marker is the footprint's own outline from its pads, so the view reads as a board.
+  const boxes = new Map();
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const p of shown) {
-    const size = Math.min(36, Math.max(13, Math.sqrt(weight(p)) * 5));
-    tile(
-      p,
-      {
-        x: ox + (p.x - minX) * scale - size / 2,
-        y: oy + (p.y - minY) * scale - size / 2,
-        w: size,
-        h: size,
-      },
-      $("tiles"),
-    );
+    const extent = footprintExtent(p),
+      box = {
+        x: p.x + extent.minX,
+        y: p.y + extent.minY,
+        w: extent.maxX - extent.minX,
+        h: extent.maxY - extent.minY,
+      };
+    boxes.set(p.id, box);
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.w);
+    maxY = Math.max(maxY, box.y + box.h);
   }
-  $("tiles").append(
-    el(
-      "span",
-      "Footprint centers · not copper routing · not to scale",
-      "board-note",
+  const margin = w < 500 ? 16 : 28,
+    scale = Math.min(
+      (w - margin * 2) / Math.max(1, maxX - minX),
+      (h - margin * 2) / Math.max(1, maxY - minY),
     ),
+    ox = (w - (maxX - minX) * scale) / 2,
+    oy = (h - (maxY - minY) * scale) / 2;
+  const frame = el("div", undefined, "board-frame");
+  position(
+    frame,
+    {
+      x: ox - 10,
+      y: oy - 10,
+      w: (maxX - minX) * scale + 20,
+      h: (maxY - minY) * scale + 20,
+    },
+    0,
   );
+  $("tiles").append(frame);
+  const placed = [],
+    rects = new Map(),
+    area = (p) => boxes.get(p.id).w * boxes.get(p.id).h;
+  // Large outlines go down first and electrical changes last, so nothing small is buried.
+  const drawn = [...shown].sort(
+    (a, b) => isElectrical(a) - isElectrical(b) || area(b) - area(a),
+  );
+  for (const p of drawn) {
+    const box = boxes.get(p.id),
+      least = isElectrical(p) ? (w < 500 ? 11 : 14) : 7,
+      width = Math.max(least, box.w * scale),
+      height = Math.max(least, box.h * scale),
+      rect = {
+        x: ox + (box.x + box.w / 2 - minX) * scale - width / 2,
+        y: oy + (box.y + box.h / 2 - minY) * scale - height / 2,
+        w: width,
+        h: height,
+      };
+    rects.set(p.id, rect);
+    if (isElectrical(p)) placed.push(rect);
+    tile(p, rect, $("tiles"), 0);
+  }
+  // Name the changed parts whose markers are too small to hold a reference.
+  const clear = (box) =>
+    box.x >= 2 &&
+    box.y >= 2 &&
+    box.x + box.w <= w - 2 &&
+    box.y + box.h <= h - 2 &&
+    !placed.some(
+      (r) =>
+        box.x < r.x + r.w &&
+        box.x + box.w > r.x &&
+        box.y < r.y + r.h &&
+        box.y + box.h > r.y,
+    );
+  textMetrics.font = `500 10px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
+  for (const p of shown.filter(isElectrical).sort(reviewOrder)) {
+    const marker = $("tiles").querySelector(
+      `.tile[data-id=${JSON.stringify(p.id)}]`,
+    );
+    if (marker.querySelector(".ref")) continue;
+    const r = rects.get(p.id),
+      width = textMetrics.measureText(p.ref).width + 6,
+      height = 14;
+    const spot = [
+      { x: r.x + r.w + 3, y: r.y + r.h / 2 - height / 2 },
+      { x: r.x - width - 3, y: r.y + r.h / 2 - height / 2 },
+      { x: r.x + r.w / 2 - width / 2, y: r.y - height - 2 },
+      { x: r.x + r.w / 2 - width / 2, y: r.y + r.h + 2 },
+    ]
+      .map((at) => ({ ...at, w: width, h: height }))
+      .find(clear);
+    if (!spot) continue;
+    placed.push(spot);
+    const label = el("span", p.ref, `board-label ${p.status}`);
+    Object.assign(label.style, { left: `${spot.x}px`, top: `${spot.y}px` });
+    marker.after(label);
+  }
 }
 function highlight(id) {
   cancelPreviewReset();

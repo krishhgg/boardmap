@@ -1071,6 +1071,28 @@ try {
     await page.locator("#map-scale-note").innerText(),
     /numbered pads/,
   );
+  const board = await page.evaluate(() => {
+    const frame = document.querySelector(".board-frame").getBoundingClientRect();
+    const tiles = [...document.querySelectorAll("#tiles .tile")];
+    const inside = (box) => box.left >= frame.left - 1 && box.right <= frame.right + 1 &&
+      box.top >= frame.top - 1 && box.bottom <= frame.bottom + 1;
+    return {
+      framed: tiles.every((tile) => inside(tile.getBoundingClientRect())),
+      smallest: Math.min(...tiles.filter((tile) => tile.matches(".electrical, .added:not(.metadata), .removed:not(.metadata)"))
+        .map((tile) => Math.min(tile.offsetWidth, tile.offsetHeight))),
+      order: tiles.map((tile) => tile.matches(".electrical, .added:not(.metadata), .removed:not(.metadata)")),
+      named: tiles.filter((tile) => tile.querySelector(".ref") ||
+        tile.nextElementSibling?.classList.contains("board-label")).length,
+      shapes: new Set(tiles.map((tile) => `${tile.offsetWidth}x${tile.offsetHeight}`)).size,
+    };
+  });
+  assert.ok(board.framed, "every footprint sits inside the board frame");
+  assert.ok(board.smallest >= 11, "electrical changes keep a selectable marker");
+  assert.deepEqual(board.order, [...board.order].sort((a, b) => a - b),
+    "electrical changes are drawn above unchanged footprints");
+  assert.ok(board.named > 0, "the board names parts");
+  if (new Set(report.parts.map((p) => p.footprint)).size > 3)
+    assert.ok(board.shapes > 3, "markers follow each footprint's own extent");
   await capture("board");
   await page.locator("#map-tab").click();
   if (report.boards.length === 1) {

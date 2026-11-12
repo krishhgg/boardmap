@@ -264,3 +264,25 @@ export function pairBundles(mine, theirs) {
   });
   return pairs;
 }
+
+// A footprint's reach around its origin, in board millimeters, from its pads.
+export function footprintExtent(part) {
+  const turn = ((part.angle ?? 0) * Math.PI) / 180;
+  let minX = -0.5,
+    maxX = 0.5,
+    minY = -0.5,
+    maxY = 0.5;
+  for (const [index, pad] of (part.pads ?? []).entries()) {
+    const x = pad.x * Math.cos(turn) + pad.y * Math.sin(turn),
+      y = -pad.x * Math.sin(turn) + pad.y * Math.cos(turn),
+      spin = ((pad.angle ?? 0) * Math.PI) / 180,
+      rx = (Math.abs(pad.w * Math.cos(spin)) + Math.abs(pad.h * Math.sin(spin))) / 2,
+      ry = (Math.abs(pad.w * Math.sin(spin)) + Math.abs(pad.h * Math.cos(spin))) / 2;
+    if (!index) [minX, maxX, minY, maxY] = [x - rx, x + rx, y - ry, y + ry];
+    minX = Math.min(minX, x - rx);
+    maxX = Math.max(maxX, x + rx);
+    minY = Math.min(minY, y - ry);
+    maxY = Math.max(maxY, y + ry);
+  }
+  return { minX, maxX, minY, maxY };
+}
