@@ -1243,6 +1243,20 @@ try {
     };
   });
   assert.ok(board.framed, "every footprint sits inside the board frame");
+  const named = page.locator(".board-label").first();
+  if (await named.count()) {
+    const namedId = await named.getAttribute("data-for");
+    await named.hover();
+    await previewSettled(namedId);
+    await named.click();
+    assert.equal(await page.locator("#diff-panel").getAttribute("data-id"), namedId,
+      "clicking a board name inspects the part it names");
+    await page.keyboard.press("Escape");
+    // The returned part holds focus and its trace. Move both away before the next checks.
+    await page.locator("#board-tab").focus();
+    await page.mouse.move(1, 1);
+    await previewSettled(null);
+  }
   assert.ok(board.smallest >= 11, "electrical changes keep a selectable marker");
   // Markers run largest to smallest, then the enlarged changes, which start a new run.
   assert.ok(board.areas.filter((area, index) => index && area > board.areas[index - 1] + 0.5).length <= 1,
@@ -1648,6 +1662,26 @@ try {
       await touchPage.touchscreen.tap(miss.x, miss.y);
       assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), miss.id,
         "a second near touch inspects it");
+      await touchPage.locator(".close-diff").tap();
+      await touchPage.keyboard.press("Escape");
+    }
+    // A tap on a visible name selects that name's own part.
+    const names = await touchPage.locator(".board-label").evaluateAll((labels) =>
+      labels.map((label) => {
+        const box = label.getBoundingClientRect();
+        return { id: label.dataset.for, x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      }));
+    for (const name of names) {
+      await touchPage.touchscreen.tap(name.x, name.y);
+      assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), name.id,
+        "tapping a board name previews the part it names");
+      await touchPage.keyboard.press("Escape");
+    }
+    if (names.length) {
+      await touchPage.touchscreen.tap(names[0].x, names[0].y);
+      await touchPage.touchscreen.tap(names[0].x, names[0].y);
+      assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), names[0].id,
+        "tapping the name again inspects that part");
       await touchPage.locator(".close-diff").tap();
       await touchPage.keyboard.press("Escape");
     }
