@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { reach } from "../src/compare.js";
-import { changeGroup, changedPins, changedLinks, footprintExtent, isElectrical } from "../web/review.js";
+import { changeGroup, changedPins, changedLinks, footprintExtent, isElectrical, netReachGroups } from "../web/review.js";
 import { buildReport } from "../src/git.js";
 import { serve } from "../src/server.js";
 import { reviewFixture } from "./fixture.mjs";
@@ -547,16 +547,30 @@ try {
       "larger net reach appears first within each tier");
   }
   const expectedLinks = changedLinks(report, candidate.id);
+  // On a busy trace, a rail with more than 12 loads is ringed without curves.
+  const direct = reach(report, candidate.id),
+    lightest = new Map();
+  const reachNets = netReachGroups(report, candidate, direct);
+  for (const net of reachNets)
+    for (const id of net.ids)
+      lightest.set(id, Math.min(lightest.get(id) ?? Infinity, net.ids.length));
+  // A rail is any net with more than 12 loads, whether or not it hides a curve.
+  const railed = direct.ids.length > 30 && reachNets.some((net) => net.ids.length > 12);
+  const drawn = (id) => !railed || lightest.get(id) <= 12;
   for (const kind of ["gained", "lost"]) {
     assert.deepEqual(
       await page.locator(`.tile.${kind}`).evaluateAll((nodes) => nodes.map((node) => node.dataset.id).sort()),
       expectedLinks[kind].sort(),
       `parts connected only in ${kind === "gained" ? "head" : "base"} are marked`);
-    const visibleIds = new Set(await page.locator(".tile").evaluateAll((nodes) => nodes.map((n) => n.dataset.id)));
     assert.equal(await page.locator(`#connections path.${kind}`).count(),
-      expectedLinks[kind].filter((id) => visibleIds.has(id)).length,
-      "every changed connection in view has its own curve");
+      expectedLinks[kind].filter(drawn).length,
+      "every changed connection off the rails has its own curve");
   }
+  assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
+    "rails ringed without curves are marked in the net list");
+  if (railed)
+    assert.match(await page.locator("#impact p").innerText(), /ringed without curves/,
+      "the readout says which rails are ringed without curves");
   const leadingNet = await page.locator(".net-reach-list li").first().boundingBox();
   const readout = await page.locator("#impact").boundingBox();
   assert.ok(leadingNet.y >= readout.y && leadingNet.y + leadingNet.height <= readout.y + readout.height,
@@ -649,7 +663,8 @@ try {
   );
   await hoverPart(tile);
   if (candidate.status === "modified")
-    assert.match(await page.locator("#impact").innerText(), /Changed:/);
+    assert.ok((await page.locator("#impact .readout-change").innerText()).length > 3,
+      "the readout names what changed on the traced part");
   for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 1024, height: 720 }, { width: 720, height: 900 }]) {
     await page.setViewportSize(viewport);
     await hoverPart(page.locator(`.tile[data-id=${JSON.stringify(candidate.id)}]`));
@@ -693,11 +708,16 @@ try {
   await previewSettled(null);
   assert.match(await page.locator(".reach-key").innerText(), /Other structural reach/,
     "the transitive key does not call mixed-revision reach connected in both");
+  assert.match(await page.locator("#impact p").innerText(), /not signal propagation/,
+    "the idle readout states the transitive caveat");
+  const idleHeight = (await page.locator("#impact").boundingBox()).height;
   await hoverPart(tile);
   assert.match(
     await page.locator("#impact").innerText(),
     /transitively reachable/,
   );
+  assert.equal((await page.locator("#impact").boundingBox()).height, idleHeight,
+    "a transitive trace keeps the readout's idle height, so the map does not move");
   const farLinks = changedLinks(report, candidate.id, { transitive: true }),
     nearIds = new Set(reach(report, candidate.id).ids);
   assert.ok(

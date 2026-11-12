@@ -665,7 +665,7 @@ select {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
-  min-height: 108px;
+  min-height: 92px;
   height: auto;
   flex-shrink: 0;
   overscroll-behavior: contain;
@@ -702,6 +702,35 @@ main:has(#diff-panel:not([hidden])) > #impact {
 #impact strong .reach-count {
   color: var(--blue);
   font-family: var(--mono);
+}
+/* What changed on the traced part, in the change list's wording and color. */
+.readout-change {
+  margin-left: 14px;
+  font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--muted);
+}
+.readout-change.modified {
+  color: #daac8c;
+}
+.readout-change.added {
+  color: var(--green);
+}
+.readout-change.removed {
+  color: var(--red);
+}
+/* Idle: title and starting parts share a row, then the sentence, then the key. */
+#impact > div.idle {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+#impact > div.idle > p,
+#impact > div.idle > .reach-key {
+  grid-column: 1 / -1;
+}
+#impact > div.idle > .reach-start {
+  grid-column: 2;
+  grid-row: 1;
+  margin: -4px 0 -4px 20px;
 }
 #impact p {
   margin: 5px 0 0;
@@ -744,9 +773,9 @@ main:has(#diff-panel:not([hidden])) > #impact {
   padding-left: 12px;
   font-size: 11px;
 }
-/* Three whole rows, so the list never ends on half a net. */
+/* Two whole rows, so the list never ends on half a net. */
 .net-reach-more .net-reach-list {
-  height: 60px;
+  height: 38px;
   overflow-y: auto;
   overscroll-behavior: contain;
   flex-direction: column;
@@ -769,6 +798,11 @@ main:has(#diff-panel:not([hidden])) > #impact {
 .net-reach-list li b {
   font-weight: 500;
 }
+/* A rail whose loads are ringed without curves. */
+.net-reach-list li.rail > span::after {
+  content: " ◌";
+  color: var(--faint);
+}
 #impact .net-reach-list strong {
   flex-shrink: 0;
   font-size: 11px;
@@ -776,15 +810,12 @@ main:has(#diff-panel:not([hidden])) > #impact {
   white-space: nowrap;
 }
 .reach-key {
-  grid-column: 2;
-  grid-row: 1 / 4;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-wrap: wrap;
+  gap: 4px 18px;
   list-style: none;
-  margin: 0;
-  padding: 0 0 0 12px;
-  border-left: 1px solid var(--line);
+  margin: 8px 0 0;
+  padding: 0;
   color: var(--muted);
   font-size: 11px;
 }
@@ -836,7 +867,7 @@ main:has(#diff-panel:not([hidden])) > #impact {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: 24px;
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -878,8 +909,15 @@ main:has(#diff-panel:not([hidden])) > #impact {
   #impact {
     min-height: 176px;
   }
-  #impact > div {
+  #impact > div,
+  #impact > div.idle {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* One column here: the starting parts go under the key instead of beside the title. */
+  #impact > div.idle > .reach-start {
+    grid-column: 1;
+    grid-row: auto;
+    margin: 10px 0 0;
   }
   .net-reach-more {
     grid-column: 1;
@@ -892,16 +930,6 @@ main:has(#diff-panel:not([hidden])) > #impact {
     height: 32px;
     flex-direction: row;
     flex-wrap: wrap;
-  }
-  .reach-key {
-    grid-column: 1;
-    grid-row: 4;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px 16px;
-    margin-top: 12px;
-    padding: 0;
-    border-left: 0;
   }
 }
 #map-panel {
@@ -1706,11 +1734,11 @@ footer {
     display: inline;
   }
 }
-/* The idle sentence takes two lines here. Reserve them so a trace does not move the map.
+/* The counts take two lines here. Reserve them so a trace does not move the map.
    Below 901px the single-column readout keeps its own, taller reserve. */
 @media (min-width: 901px) and (max-width: 1150px) {
   #impact {
-    min-height: 118px;
+    min-height: 104px;
   }
 }
 @media (max-width: 700px) {
