@@ -1307,13 +1307,13 @@ footer {
   color: var(--blue);
   font-size: 12px;
 }
-.reach-details.none > summary {
-  list-style: none;
-  pointer-events: none;
+.reach-none {
+  margin: 12px 0;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   color: var(--muted);
-}
-.reach-details.none > summary::-webkit-details-marker {
-  display: none;
+  font-size: 12px;
 }
 .reach-net h3 {
   position: sticky;

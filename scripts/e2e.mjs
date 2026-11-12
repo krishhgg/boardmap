@@ -1051,6 +1051,26 @@ try {
     "stepping out focuses the group that was open");
   await page.locator("#search").fill(candidate.ref);
   assert.ok((await page.locator(".tile").count()) < report.parts.length);
+  if (report.stats.changed) {
+    const first = await page.locator(".part-row").first().getAttribute("data-id");
+    const sought = report.parts.find((p) => p.id === first);
+    await page.locator("#search").fill(sought.ref);
+    const sections = await page.locator(".list-heading").evaluateAll((nodes) =>
+      nodes.map((node) => node.firstChild.textContent));
+    assert.equal(sections[0], "Exact match", "a searched reference leads the list in its own section");
+    assert.equal(new Set(sections).size, sections.length, "no group heading repeats");
+    assert.deepEqual(
+      await page.locator(".list-heading .group-count").evaluateAll((nodes) =>
+        nodes.map((node) => Number(node.textContent))),
+      await page.locator("#part-list").evaluate((list) => {
+        const counts = [];
+        for (const node of list.children)
+          if (node.matches(".list-heading")) counts.push(0);
+          else if (node.matches(".part-row")) counts[counts.length - 1]++;
+        return counts;
+      }),
+      "each heading counts the rows under it");
+  }
   await page.locator("#search").fill("no-component-matches-this");
   await page.locator("#map-empty").waitFor({ state: "visible" });
   await page.locator("#search").fill("");
