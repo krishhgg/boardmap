@@ -1426,7 +1426,49 @@ footer {
   white-space: pre-wrap;
   font-size: 11px;
 }
-.geometry-details summary {
+.pad-facts {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 0;
+  font: 11px/1.5 var(--mono);
+}
+.pad-facts + .pad-facts {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.pad-facts dt {
+  color: var(--faint);
+}
+.pad-facts dd {
+  margin: 0;
+  color: var(--muted);
+}
+.pad-facts dd.changed {
+  color: inherit;
+}
+/* Narrow windows leave a cell too little room for two columns. Stack label over value. */
+@media (max-width: 1000px) {
+  .pad-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .pad-facts dd {
+    margin-bottom: 4px;
+  }
+}
+.more-positions summary {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.more-positions[open] summary {
+  display: none;
+}
+.geometry-details > summary {
   cursor: pointer;
   padding: 12px 0;
   font-size: 12px;

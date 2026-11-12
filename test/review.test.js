@@ -12,6 +12,9 @@ import {
   changedMechanicalPads,
   propertyPriority,
   propertyReasons,
+  padFacts,
+  padBundles,
+  pairBundles,
 } from "../web/review.js";
 const part = (changes = [], extra = {}) => ({
   status: "modified",
@@ -225,4 +228,47 @@ test("population transitions and both-present part identifiers outrank descripti
       changeGroup(part([{ field: "fields", before, after }])),
       "Metadata",
     );
+});
+
+test("pad geometry reads as named properties and repeated pads share one description", () => {
+  const paste = (x, y) => ({
+    number: "", type: "smd", shape: "roundrect", x, y, angle: 0, w: 1.1, h: 1.1,
+    drill: [], layers: ["F.Paste"], geometry: [["roundrect_rratio", "0.25"]],
+  });
+  assert.deepEqual(padFacts(paste(0, 0)), [
+    ["Pad", "SMD roundrect"],
+    ["Size", "1.1 × 1.1 mm"],
+    ["Rotation", "0°"],
+    ["Drill", "None"],
+    ["Layers", "F.Paste"],
+    ["Corner ratio", "0.25"],
+  ]);
+  const hole = {
+    number: "1", type: "thru_hole", shape: "oval", x: 1, y: 2, angle: 90, w: 2, h: 3,
+    drill: ["oval", "0.8", "1.2", ["offset", "0.1", "0"]], layers: ["*.Cu", "*.Mask"], geometry: [],
+  };
+  assert.deepEqual(padFacts(hole)[3], ["Drill", "oval 0.8 × 1.2 mm, offset 0.1, 0 mm"]);
+  const bundles = padBundles([paste(-1, -1), paste(1, 1), hole, paste(1, -1)]);
+  assert.equal(bundles.length, 2);
+  assert.deepEqual(bundles[0].at, ["-1, -1", "1, 1", "1, -1"]);
+  assert.deepEqual(bundles[1].at, ["1, 2"]);
+  assert.deepEqual(padBundles(), []);
+});
+
+test("an edited pad does not mark its untouched neighbors as changed", () => {
+  const pad = (x, w = 1) => ({
+    number: "", type: "smd", shape: "rect", x, y: 0, angle: 0, w, h: 1,
+    drill: [], layers: ["F.Cu"], geometry: [],
+  });
+  const other = { ...pad(9), layers: ["B.Cu"] };
+  const before = padBundles([pad(0), pad(1), other]),
+    after = padBundles([pad(0), pad(1, 2), other]);
+  assert.equal(before.length, 2);
+  assert.equal(after.length, 3);
+  const pairs = pairBundles(after, before);
+  assert.equal(pairs[0], before[0], "the unchanged group pairs with its original");
+  assert.equal(pairs[2], before[1], "an unrelated group stays paired with itself");
+  assert.equal(pairs[1], null, "the split-off pad has no counterpart");
+  const reordered = pairBundles(padBundles([other, pad(0)]), padBundles([pad(0), other]));
+  assert.deepEqual(reordered.map((bundle) => bundle.facts[4][1]), ["B.Cu", "F.Cu"]);
 });

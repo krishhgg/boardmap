@@ -210,3 +210,57 @@ export const rankedNetReach = (report, part, result, transitive = false) =>
     name,
     count: ids.length,
   }));
+
+// Named pad properties in reading order, with units.
+export function padFacts(pad) {
+  const kind =
+    { smd: "SMD", thru_hole: "Through-hole", np_thru_hole: "Unplated hole", connect: "Edge connector" }[
+      pad.type
+    ] ?? pad.type;
+  const drill = pad.drill ?? [];
+  const oval = drill[0] === "oval";
+  const offset = drill.find((n) => Array.isArray(n) && n[0] === "offset");
+  const hole = !drill.length
+    ? "None"
+    : `${oval ? `oval ${drill[1]} × ${drill[2]}` : drill[0]} mm${offset ? `, offset ${offset[1]}, ${offset[2]} mm` : ""}`;
+  return [
+    ["Pad", `${kind} ${pad.shape}`],
+    ["Size", `${pad.w} × ${pad.h} mm`],
+    ["Rotation", `${pad.angle}°`],
+    ["Drill", hole],
+    ["Layers", pad.layers.join(", ")],
+    ...pad.geometry.map((entry) =>
+      entry[0] === "roundrect_rratio"
+        ? ["Corner ratio", String(entry[1])]
+        : [String(entry[0]), JSON.stringify(entry.slice(1))],
+    ),
+  ];
+}
+// Pads that differ only in position share one description and list their positions.
+export function padBundles(pads = []) {
+  const bundles = new Map();
+  for (const pad of pads) {
+    const facts = padFacts(pad),
+      key = JSON.stringify(facts);
+    if (!bundles.has(key)) bundles.set(key, { facts, at: [] });
+    bundles.get(key).at.push(`${pad.x}, ${pad.y}`);
+  }
+  return [...bundles.values()];
+}
+
+// Pair each bundle with its counterpart in the other revision. Identical descriptions pair
+// first, so an untouched group stays neutral when a neighbor splits. The rest pair in order.
+export function pairBundles(mine, theirs) {
+  const free = [...theirs],
+    pairs = new Array(mine.length).fill(null);
+  mine.forEach((bundle, index) => {
+    const at = free.findIndex(
+      (other) => JSON.stringify(other.facts) === JSON.stringify(bundle.facts),
+    );
+    if (at >= 0) pairs[index] = free.splice(at, 1)[0];
+  });
+  mine.forEach((_, index) => {
+    if (!pairs[index] && free.length) pairs[index] = free.shift();
+  });
+  return pairs;
+}

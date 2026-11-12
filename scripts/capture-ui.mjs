@@ -97,8 +97,8 @@ try {
     await settle(page);
     await shot(page, "inspector-neighbors");
     await page.locator(".reach-details summary").click();
-    if (await page.locator(".geometry-details summary").count()) {
-      await page.locator(".geometry-details summary").click();
+    if (await page.locator(".geometry-details > summary").count()) {
+      await page.locator(".geometry-details > summary").click();
       await page.locator(".geometry-details").scrollIntoViewIfNeeded();
       await settle(page);
       await shot(page, "inspector-geometry");
