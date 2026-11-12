@@ -977,7 +977,7 @@ function openDiff(p, origin) {
               (pad) =>
                 `${pad.type} ${pad.shape}; ${pad.w} × ${pad.h} mm; at ${pad.x}, ${pad.y}; ${pad.angle}°; drill ${JSON.stringify(pad.drill)}; layers ${pad.layers.join(", ")}${pad.geometry.length ? `; shape ${JSON.stringify(pad.geometry)}` : ""}`,
             )
-            .join("\n");
+            .join("\n\n");
         for (const number of [...new Set([...a.keys(), ...b.keys()])].sort(
           (a, b) => a.localeCompare(b, undefined, { numeric: true }),
         )) {
