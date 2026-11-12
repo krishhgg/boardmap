@@ -58,6 +58,7 @@ let report,
   hoverRetarget,
   lastHoverPoint,
   lastTouch,
+  touchPoint,
   zoomAnimation;
 const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
@@ -271,6 +272,8 @@ function setScope(scope, from) {
     for (const tile of ghost.querySelectorAll(".tile"))
       tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed", "railed");
   $("tiles").classList.remove("hub");
+  for (const pick of $("nearby").querySelectorAll("button"))
+    pick.setAttribute("aria-pressed", "false");
   }
   state.scope = scope;
   state.selected = null;
@@ -398,7 +401,7 @@ function renderList() {
     row.classList.toggle("selected", state.selected === p.id);
     row.setAttribute(
       "aria-label",
-      `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}, ${shortFile(p.file)}`,
+      `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} ${rewired === 1 ? "pin" : "pins"} rewired` : ""}, ${shortFile(p.file)}`,
     );
     row.append(el("span", mark(p), "status-mark"));
     const meta = el("span", undefined, "part-meta"),
@@ -532,8 +535,12 @@ function showNearby(x, y) {
       };
     })
     .filter((near) => near.distance <= 30)
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, 5);
+    // The previewed part leads, then the rest by distance.
+    .sort(
+      (a, b) =>
+        (b.tile.dataset.id === state.touchPreview) -
+          (a.tile.dataset.id === state.touchPreview) || a.distance - b.distance,
+    );
   strip.replaceChildren(el("span", close.length > 1 ? "Near your tap" : "Tap a change. Close neighbors are listed here."));
   if (close.length < 2) return;
   for (const { tile } of close) {
@@ -622,7 +629,7 @@ function tile(p, r, parent, gap) {
   node.dataset.focusKey = `part:${p.id}`;
   position(node, r, gap);
   const rewired = changedPins(p).length;
-  node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}`);
+  node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} ${rewired === 1 ? "pin" : "pins"} rewired` : ""}`);
   node.title = `${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
   const { fontSize, horizontalPadding, verticalPadding } = referenceLayout(p.ref, r);
   node.style.padding = `${verticalPadding}px ${horizontalPadding}px`;
@@ -668,7 +675,7 @@ function buildMap(restore) {
   root.classList.toggle("board", state.view === "board");
   $("map-scale-note").classList.toggle("board", state.view === "board");
   $("nearby").hidden = !(
-    state.view === "board" && matchMedia("(pointer: coarse)").matches
+    state.view === "board" && matchMedia("(any-pointer: coarse)").matches
   );
   $("nearby").replaceChildren(el("span", "Tap a change. Close neighbors are listed here."));
   $("connections").replaceChildren();
@@ -917,14 +924,14 @@ function renderBoard(shown, w, h) {
       )
       .map((p) => p.id),
   );
-  // A changed part only a few markers wide must keep its own face, so markers move off it.
-  // Larger footprints legitimately hold parts inside their outline and are left alone.
+  // A changed part only a few markers wide or tall must keep its own face, so markers move
+  // off it. Larger footprints legitimately hold parts inside their outline and are left alone.
   const faces = shown
     .filter(
       (p) =>
         isElectrical(p) &&
         !enlarged.has(p.id) &&
-        Math.max(rects.get(p.id).w, rects.get(p.id).h) <= floor * 4,
+        Math.min(rects.get(p.id).w, rects.get(p.id).h) <= floor * 4,
     )
     .map((p) => rects.get(p.id));
   spread(
@@ -971,6 +978,18 @@ function renderBoard(shown, w, h) {
       h: box.height + 2,
     });
   }
+  const gap = (a, b) =>
+    Math.hypot(
+      Math.max(a.x - (b.x + b.w), 0, b.x - (a.x + a.w)),
+      Math.max(a.y - (b.y + b.h), 0, b.y - (a.y + a.h)),
+    );
+  const changes = shown.filter(isElectrical);
+  const ownsSpot = (box, id) => {
+    const own = gap(box, rects.get(id));
+    return changes.every(
+      (other) => other.id === id || gap(box, rects.get(other.id)) > own + 1,
+    );
+  };
   textMetrics.font = `500 10px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
   for (const p of shown.filter(isElectrical).sort(reviewOrder)) {
     const marker = $("tiles").querySelector(
@@ -980,8 +999,10 @@ function renderBoard(shown, w, h) {
     const r = rects.get(p.id),
       width = textMetrics.measureText(p.ref).width + 6,
       height = 14;
-    // Beside the marker first, then its corners, then one step farther out.
-    const spot = [
+    // Beside the marker first, then its corners, then one step farther out. A name there
+    // must sit nearer its own marker than any other change, so it reads as that part's.
+    const sized = (at) => ({ ...at, w: width, h: height });
+    let spot = [
       { x: r.x + r.w + 3, y: r.y + r.h / 2 - height / 2 },
       { x: r.x - width - 3, y: r.y + r.h / 2 - height / 2 },
       { x: r.x + r.w / 2 - width / 2, y: r.y - height - 2 },
@@ -993,28 +1014,105 @@ function renderBoard(shown, w, h) {
       { x: r.x + r.w / 2 - width / 2, y: r.y - height * 2 - 4 },
       { x: r.x + r.w / 2 - width / 2, y: r.y + r.h + height + 4 },
     ]
-      .map((at) => ({ ...at, w: width, h: height }))
-      .find(clear);
+      .map(sized)
+      .find((box) => clear(box) && ownsSpot(box, p.id));
+    // In a crowded cluster the name moves out to free space and a thin line ties it to its marker.
+    let led = false;
+    if (!spot) {
+      const cx = r.x + r.w / 2,
+        cy = r.y + r.h / 2;
+      spot = [26, 38, 52]
+        .flatMap((reach) =>
+          [-90, 90, -45, -135, 45, 135, 0, 180].map((angle) => {
+            const turn = (angle * Math.PI) / 180;
+            return {
+              x: cx + Math.cos(turn) * (reach + width / 2) - width / 2,
+              y: cy + Math.sin(turn) * reach - height / 2,
+            };
+          }),
+        )
+        .map(sized)
+        .find(clear);
+      led = Boolean(spot);
+    }
     if (!spot) continue;
-    placed.push(spot);
+    // On a touch screen a name's hit area reaches 6px past its text. Reserve that too.
+    const pad = matchMedia("(any-pointer: coarse)").matches ? 6 : 0;
+    placed.push({
+      x: spot.x - pad,
+      y: spot.y - pad,
+      w: spot.w + pad * 2,
+      h: spot.h + pad * 2,
+    });
     const label = el("span", p.ref, `board-label ${p.status}`);
     Object.assign(label.style, { left: `${spot.x}px`, top: `${spot.y}px` });
     // A name selects its own part, exactly as its marker does.
     label.dataset.for = p.id;
+    // Crossing a name on the way to the readout does not retarget. Resting on it does.
     label.onpointermove = (event) => {
-      if (event.pointerType !== "touch" && state.hover !== p.id) highlight(p.id);
+      if (event.pointerType === "touch" || state.hover === p.id) return;
+      if (!state.hover) highlight(p.id);
+      else if (
+        hoverRetarget?.id !== p.id ||
+        Math.hypot(event.clientX - hoverRetarget.x, event.clientY - hoverRetarget.y) > 4
+      ) {
+        // Like a marker, the wait restarts while the pointer keeps moving.
+        cancelHoverRetarget();
+        hoverRetarget = {
+          id: p.id,
+          x: event.clientX,
+          y: event.clientY,
+          timer: setTimeout(() => highlight(p.id), 160),
+        };
+      }
     };
-    label.onclick = () => {
-      if (lastTouch) touchPart(marker, p);
-      else openDiff(p, partOrigin(marker));
+    label.onpointerleave = cancelHoverRetarget;
+    if (led) {
+      const from = { x: r.x + r.w / 2, y: r.y + r.h / 2 },
+        to = {
+          x: Math.max(spot.x, Math.min(spot.x + spot.w, from.x)),
+          y: Math.max(spot.y, Math.min(spot.y + spot.h, from.y)),
+        },
+        line = el("i", undefined, `board-leader ${p.status}`);
+      Object.assign(line.style, {
+        left: `${from.x}px`,
+        top: `${from.y}px`,
+        width: `${Math.hypot(to.x - from.x, to.y - from.y)}px`,
+        transform: `rotate(${Math.atan2(to.y - from.y, to.x - from.x)}rad)`,
+      });
+      label.dataset.led = "true";
+      queueMicrotask(() => label.after(line));
+    }
+    label.onclick = (event) => {
+      if (!lastTouch) {
+        openDiff(p, partOrigin(marker));
+        return;
+      }
+      // Browsers snap a touch to a nearby control, so go by where the finger landed.
+      const at = touchPoint ?? { x: event.clientX, y: event.clientY },
+        text = label.getBoundingClientRect(),
+        beyond = Math.max(text.left - at.x, at.x - text.right, text.top - at.y, at.y - text.bottom);
+      // The name's hit area reaches 6px past its text. A touch in that margin that lands
+      // squarely on another changed marker belongs to that marker, and a touch farther
+      // out belongs to the nearest small change, if one is close.
+      const under =
+        beyond > 0
+          ? (document
+              .elementsFromPoint(at.x, at.y)
+              .find((node) => node.matches(".tile:not(.unchanged):not(.metadata)")) ??
+            (beyond > 6 ? nearestChange(at.x, at.y) : null))
+          : null;
+      if (under) touchPart(under, parts.get(under.dataset.id));
+      else touchPart(marker, p);
     };
     marker.after(label);
   }
 }
 // A net with more loads than this is treated as a rail on a busy trace.
 const railSize = 12;
-// A part with more neighbors than this is traced as a hub.
-const hubSize = 60;
+// A part with more neighbors than this, or more curves to draw, is traced as a hub.
+const hubSize = 60,
+  hubCurves = 20;
 function highlight(id) {
   cancelPreviewReset();
   cancelHoverRetarget();
@@ -1073,11 +1171,9 @@ function highlight(id) {
   // A hub touches so much that unchanged links bury the changed ones. There, curves are
   // drawn for the changed connections alone, and unchanged neighbors keep a quiet tint.
   // Direct reach only. A transitive walk needs its unchanged steps to stay connected.
-  // A phone map has a third of the room, so a part counts as a hub there at half the size.
   const hub =
     !state.transitive &&
-    result.ids.length >
-      (matchMedia("(max-width: 700px)").matches ? hubSize / 2 : hubSize);
+    (result.ids.length > hubSize || drawable.length > hubCurves);
   $("tiles").classList.toggle("hub", hub);
   const changedOnly = hub && drawable.some(changed);
   const dense = !changedOnly && drawable.length > 80;
@@ -1149,7 +1245,7 @@ function highlight(id) {
           rx: 3,
           // Dark gray, not black: a curve continues faintly under a name instead of
           // seeming to start at it.
-          fill: "#3d3d3d",
+          fill: "#6e6e6e",
         }),
       );
   };
@@ -1175,7 +1271,8 @@ function highlight(id) {
     );
   }
   const curves = svgEl("g", { mask: "url(#label-mask)" }),
-    starts = svgEl("g");
+    starts = svgEl("g"),
+    startSpots = new Set();
   svg.append(mask, curves, starts);
   const kept = edges.filter(
     (edge) => edge.source !== id || !changed(edge),
@@ -1183,10 +1280,15 @@ function highlight(id) {
   for (const edge of edges) {
     const ca = centers.get(edge.source),
       cb = centers.get(edge.target);
-    const a = borderPoint(ca, cb),
+    const edgePoint = borderPoint(ca, cb),
       b = borderPoint(cb, ca);
     const out = normal(ca, cb),
-      back = normal(cb, ca),
+      back = normal(cb, ca);
+    // A curve from the traced part starts inside it, so a part flush against that edge
+    // cannot be mistaken for the source.
+    const inset =
+      edge.source === id ? Math.min(14, Math.min(ca.w, ca.h) * 0.3) : 0,
+      a = { x: edgePoint.x - out.x * inset, y: edgePoint.y - out.y * inset },
       pull = Math.max(10, Math.min(140, Math.hypot(b.x - a.x, b.y - a.y) * 0.45));
     const d = `M ${a.x} ${a.y} C ${a.x + out.x * pull} ${a.y + out.y * pull}, ${b.x + back.x * pull} ${b.y + back.y * pull}, ${b.x} ${b.y}`;
     // Only a curve from the traced part is known to belong to one revision. Farther hops
@@ -1226,7 +1328,9 @@ function highlight(id) {
         svgEl("circle", { cx: b.x, cy: b.y, r: kind ? 2.5 : 2, class: `link-end${kind}` }),
       );
     // A dot where each curve leaves the traced part shows which tile it starts from.
-    if (edge.source === id && edges.length <= 40)
+    // On a small traced part, dots that share a spot are drawn once, so they do not bury it.
+    const spot = `${Math.round(a.x / 4)}:${Math.round(a.y / 4)}`;
+    if (edge.source === id && edges.length <= 40 && !startSpots.has(spot) && startSpots.add(spot))
       starts.append(
         svgEl("circle", { cx: a.x, cy: a.y, r: 2.5, class: `link-end link-start${kind}` }),
       );
@@ -1245,14 +1349,13 @@ function highlight(id) {
   const facts = [];
   if (gained.size) facts.push(el("span", `${gained.size} only in head`, "gained"), " · ");
   if (lost.size) facts.push(el("span", `${lost.size} only in base`, "lost"), " · ");
+  const railNames = rails.map((net) => net.name.split("/").at(-1)).join(", ");
   const ringed = rails.length
-    ? ` · no curves for ${rails.map((net) => net.name.split("/").at(-1)).join(", ")}`
+    ? ` · ${rails.length === 1 ? "rail" : "rails"} ${railNames} tinted`
     : "";
-  const which = changedOnly
-    ? " (changed links only)"
-    : dense
-      ? " (changed and electrical links only)"
-      : "";
+  const drawnText = changedOnly
+    ? `${edges.length} changed ${edges.length === 1 ? "link" : "links"} drawn`
+    : `${edges.length} ${curveUnit} shown${dense ? " (changed and electrical links only)" : ""}`;
   // How the trace is drawn is secondary to what changed, so it reads quieter. Neighbors
   // outside this view are counted only when there are some.
   const where = outside
@@ -1262,8 +1365,8 @@ function highlight(id) {
     el(
       "span",
       phone
-        ? `${where}${edges.length} ${curveUnit}${rails.length ? ` · none for ${rails.length} ${rails.length === 1 ? "rail" : "rails"}` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
-        : `${where}${edges.length} ${curveUnit} shown${which}${ringed}. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
+        ? `${where}${changedOnly ? drawnText : `${edges.length} ${curveUnit}`}${rails.length ? ` · ${rails.length} ${rails.length === 1 ? "rail" : "rails"} tinted` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
+        : `${where}${drawnText}${ringed}. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
       "drawn",
     ),
   );
@@ -1304,7 +1407,7 @@ function highlight(id) {
       label.title = net.name;
       if (rails.some((rail) => rail.name === net.name)) {
         row.classList.add("rail");
-        row.title = "Every part on this rail stays highlighted. Curves are drawn for smaller nets.";
+        row.title = "Every part on this rail is tinted. Curves are drawn for smaller nets.";
       }
       if (net.change) {
         row.dataset.change = net.change;
@@ -1369,6 +1472,8 @@ function resetImpact() {
   for (const tile of $("tiles").querySelectorAll(".tile"))
     tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed", "railed");
   $("tiles").classList.remove("hub");
+  for (const pick of $("nearby").querySelectorAll("button"))
+    pick.setAttribute("aria-pressed", "false");
   if (state.selected) return;
   // An unchanged idle readout keeps its buttons, and their focus, in place.
   const idle = JSON.stringify([
@@ -1439,7 +1544,7 @@ function resetImpact() {
       );
       open.setAttribute(
         "aria-label",
-        `Inspect ${p.ref}, ${rewired ? `${rewired} pins rewired` : p.status}`,
+        `Inspect ${p.ref}, ${rewired ? `${rewired} ${rewired === 1 ? "pin" : "pins"} rewired` : p.status}`,
       );
       open.onclick = () => openDiff(p, { region: "map", key: `part:${p.id}` });
       start.append(open);
@@ -1810,23 +1915,29 @@ function inspectorImpact(p) {
     "reach-help",
   ));
   // Nets this part joined or left come first, as in the map readout.
-  const joinedOrLeft = (name) => {
-    const net = Object.values(report.nets).find(
-      (net) => net.file === p.file && net.name === name,
-    );
-    return (
-      !state.transitive &&
-      Boolean(net) &&
-      net.before.includes(p.id) !== net.after.includes(p.id)
-    );
-  };
+  // Looked up once per net, and not at all for a transitive walk.
+  const sides = new Map();
+  if (!state.transitive)
+    for (const net of Object.values(report.nets)) {
+      if (net.file !== p.file) continue;
+      const before = net.before.includes(p.id),
+        after = net.after.includes(p.id);
+      if (before !== after) sides.set(net.name, after ? "head" : "base");
+    }
+  const membership = (name) => sides.get(name) ?? "";
   for (const group of netReachGroups(report, p, result, state.transitive).sort(
-    (a, b) => joinedOrLeft(b.name) - joinedOrLeft(a.name),
+    (a, b) => sides.has(b.name) - sides.has(a.name),
   )) {
     if (!group.ids.length) continue;
     const section = el("section", undefined, "reach-net");
     section.dataset.net = group.name;
     const heading = el("h3");
+    const side = membership(group.name);
+    if (side) {
+      const sign = el("b", side === "head" ? "+ " : "− ", side === "head" ? "gained" : "lost");
+      sign.title = `${p.ref} is on this net only in ${side}`;
+      heading.append(sign);
+    }
     heading.append(
       netLabel(group.name),
       document.createTextNode(` · ${group.ids.length} ${group.ids.length === 1 ? "part" : "parts"}`),
@@ -2299,6 +2410,7 @@ async function init() {
     });
     document.addEventListener("pointerdown", (event) => {
       lastTouch = event.pointerType === "touch";
+      touchPoint = lastTouch ? { x: event.clientX, y: event.clientY } : null;
       if (
         lastTouch &&
         state.touchPreview &&
@@ -2319,14 +2431,12 @@ async function init() {
         // A touch that lands on any changed part means that part.
         const direct = event.target.closest(".tile:not(.unchanged):not(.metadata)");
         const near = direct ?? nearestChange(event.clientX, event.clientY);
-        if (!near) return;
-        if (!direct) {
-          event.stopPropagation();
-          event.preventDefault();
-          touchPart(near, parts.get(near.dataset.id));
-        }
-        // List the neighbors once this tap has been handled.
+        // List the neighbors once this tap has been handled, whether or not it picked one.
         setTimeout(() => showNearby(event.clientX, event.clientY));
+        if (!near || direct) return;
+        event.stopPropagation();
+        event.preventDefault();
+        touchPart(near, parts.get(near.dataset.id));
       },
       true,
     );

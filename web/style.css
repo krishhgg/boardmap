@@ -1036,6 +1036,14 @@ main:has(#diff-panel:not([hidden])) > #impact {
 .zooming #tiles {
   pointer-events: none;
 }
+/* Part labels would stretch with the zoom, so they sit out the 260ms and fade back in. */
+.tile > span {
+  transition: opacity 0.12s;
+}
+.zooming .tile > span {
+  opacity: 0;
+  transition: none;
+}
 .zooming #connections {
   visibility: hidden;
 }
@@ -1506,6 +1514,12 @@ footer {
   color: var(--muted);
   font-size: 12px;
 }
+.reach-net h3 .gained {
+  color: var(--green);
+}
+.reach-net h3 .lost {
+  color: var(--red);
+}
 .reach-net h3 {
   position: sticky;
   top: 0;
@@ -1769,7 +1783,7 @@ footer {
   transition: opacity 0.12s;
 }
 /* The name is small. Its hit area reaches 6px beyond it on a touch screen. */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .board-label::before {
     content: "";
     position: absolute;
@@ -1783,8 +1797,25 @@ footer {
   color: var(--red);
   text-decoration: line-through;
 }
-.tile.dimmed + .board-label {
+.tile.dimmed + .board-label,
+.tile.dimmed + .board-label + .board-leader {
   opacity: 0.25;
+}
+/* Ties a name that had to move out of a crowded cluster to its marker. */
+.board-leader {
+  position: absolute;
+  height: 1px;
+  transform-origin: 0 0;
+  background: var(--orange);
+  opacity: 0.8;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.board-leader.added {
+  background: var(--green);
+}
+.board-leader.removed {
+  background: var(--red);
 }
 .board-chooser {
   height: 100%;

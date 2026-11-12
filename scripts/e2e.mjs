@@ -588,12 +588,12 @@ try {
       "every changed connection off the rails has its own curve");
   }
   // On a hub with changed links, only those links are drawn and unchanged neighbors lose their ring.
-  const hubTrace = direct.ids.length > 60 &&
+  const hubTrace = (direct.ids.length > 60 || direct.ids.filter(drawn).length > 20) &&
     [...expectedLinks.gained, ...expectedLinks.lost].some(drawn);
   if (hubTrace) {
     assert.equal(await page.locator("#connections path:not(.gained):not(.lost)").count(), 0,
       "a hub trace draws curves for changed connections only");
-    assert.match(await page.locator("#impact p").innerText(), /changed links only/);
+    assert.match(await page.locator("#impact p").innerText(), /changed links? drawn/);
     assert.ok(await page.locator(".tile.affected:not(.gained):not(.lost)").evaluateAll((tiles) =>
       tiles.every((tile) => getComputedStyle(tile).boxShadow === "none")),
       "an unchanged connection on a hub trace has no ring");
@@ -604,13 +604,18 @@ try {
     railed ? direct.ids.filter((id) => !drawn(id)).sort() : [],
     "rail-only neighbors, and only those, give up their ring");
   if (await page.locator("#connections path").count() <= 40)
-    assert.equal(await page.locator("#connections .link-start").count(),
-      await page.locator("#connections path").count(),
-      "each curve has a dot where it leaves the traced part");
+    assert.ok(await page.evaluate(() => {
+      const dots = [...document.querySelectorAll("#connections .link-start")].map((dot) =>
+        [dot.cx.baseVal.value, dot.cy.baseVal.value]);
+      return [...document.querySelectorAll("#connections path")].every((path) => {
+        const start = path.getPointAtLength(0);
+        return dots.some(([x, y]) => Math.hypot(x - start.x, y - start.y) <= 6);
+      });
+    }), "each curve leaves the traced part at a dot");
   assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
     "rails shown without curves are marked in the net list");
   if (railed)
-    assert.match(await page.locator("#impact p").innerText(), /no curves for /,
+    assert.match(await page.locator("#impact p").innerText(), /rails? .+ tinted/,
       "the readout says which rails are shown without curves");
   const leadingNet = await page.locator(".net-reach-list li").first().boundingBox();
   const readout = await page.locator("#impact").boundingBox();
@@ -629,7 +634,7 @@ try {
   const paths = await page.locator("#connections path").count();
   assert.match(
     await page.locator("#impact").innerText(),
-    new RegExp(`${paths} ${paths === 1 ? "curve" : "curves"} shown`),
+    new RegExp(`${paths} (${paths === 1 ? "curve" : "curves"} shown|changed ${paths === 1 ? "link" : "links"} drawn)`),
   );
   // Move into the real gutter outside this tile, while staying inside the canvas.
   await page.locator("#search").focus();
@@ -1289,12 +1294,17 @@ try {
     });
     if (!inner) return null;
     const box = inner.getBoundingClientRect();
+    // Hover a point where the large footprint itself is on top, clear of names and parts.
+    const free = [[2, 2], [outer.width - 3, 2], [2, outer.height - 3], [outer.width - 3, outer.height - 3]]
+      .map(([dx, dy]) => [outer.x + dx, outer.y + dy])
+      .find(([x, y]) => document.elementFromPoint(x, y) === tiles[0]);
+    if (!free) return null;
     return { id: inner.dataset.id, x: box.x + box.width / 2, y: box.y + box.height / 2,
-      ox: outer.x + 2, oy: outer.y + 2, outer: tiles[0].dataset.id };
+      ox: free[0], oy: free[1], outer: tiles[0].dataset.id };
   });
   if (tall) {
     await page.mouse.move(tall.ox, tall.oy);
-    await page.mouse.move(tall.ox + 1, tall.oy + 1);
+    await page.mouse.move(tall.ox, tall.oy + (tall.oy > 400 ? -1 : 1));
     await previewSettled(tall.outer);
     assert.equal(await page.evaluate(({ x, y }) =>
       document.elementFromPoint(x, y).closest(".tile")?.dataset.id, tall), tall.id,
@@ -1328,6 +1338,23 @@ try {
   assert.ok(phoneBoard.slack <= 190 || phoneBoard.height <= 200,
     `the phone board canvas follows the board's shape: ${JSON.stringify(phoneBoard)}`);
   assert.equal(phoneBoard.covered, 0, "no label covers a reference drawn inside a marker");
+  assert.deepEqual(await page.evaluate(() => {
+    const gap = (a, b) => Math.hypot(
+      Math.max(a.left - b.right, 0, b.left - a.right), Math.max(a.top - b.bottom, 0, b.top - a.bottom));
+    const markers = [...document.querySelectorAll("#tiles .tile")].filter((tile) =>
+      tile.matches(".electrical, .added:not(.metadata), .removed:not(.metadata)"));
+    // A name moved out of a cluster is tied to its marker by a line instead.
+    return [...document.querySelectorAll(".board-label:not([data-led])")].filter((label) => {
+      const box = label.getBoundingClientRect();
+      const own = gap(box, markers.find((tile) => tile.dataset.id === label.dataset.for).getBoundingClientRect());
+      return markers.some((tile) => tile.dataset.id !== label.dataset.for &&
+        gap(box, tile.getBoundingClientRect()) <= own);
+    }).map((label) => label.textContent);
+  }), [], "every board name sits nearer its own marker than any other change");
+  assert.ok(await page.evaluate(() =>
+    [...document.querySelectorAll(".board-label[data-led]")].every((label) =>
+      label.nextElementSibling?.classList.contains("board-leader"))),
+    "a name moved out of a cluster has a line to its marker");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -1648,7 +1675,8 @@ try {
           const x = dx < 0 ? box.left + dx : dx > 0 ? box.right + dx : box.left + box.width / 2,
             y = dy < 0 ? box.top + dy : dy > 0 ? box.bottom + dy : box.top + box.height / 2;
           if (boxes.every((other, at) => at === index || gap(other, x, y) > gap(box, x, y) + 2) &&
-              !document.elementFromPoint(x, y)?.closest(".tile[data-enlarged]") &&
+              // Not on another changed part, and not on a name, which selects its own part.
+              !document.elementFromPoint(x, y)?.closest(".tile:not(.unchanged):not(.metadata), .board-label") &&
               document.elementFromPoint(x, y)?.closest("#tiles"))
             return { id: tiles[index].dataset.id, x, y };
         }
@@ -1667,22 +1695,53 @@ try {
     }
     // A tap on a visible name selects that name's own part.
     const names = await touchPage.locator(".board-label").evaluateAll((labels) =>
-      labels.map((label) => {
+      labels.map((label) => ({ id: label.dataset.for })));
+    const nameCenter = (id) =>
+      touchPage.locator(`.board-label[data-for=${JSON.stringify(id)}]`).evaluate((label) => {
         const box = label.getBoundingClientRect();
-        return { id: label.dataset.for, x: box.left + box.width / 2, y: box.top + box.height / 2 };
-      }));
+        const x = box.left + box.width / 2, y = box.top + box.height / 2;
+        const top = document.elementFromPoint(x, y);
+        return { x, y, top: `${top.className}:${top.dataset.for ?? top.dataset.id ?? ""}` };
+      });
     for (const name of names) {
-      await touchPage.touchscreen.tap(name.x, name.y);
+      // Measured right before the tap, because an earlier tap can move the page.
+      const at = await nameCenter(name.id);
+      await touchPage.touchscreen.tap(at.x, at.y);
       assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), name.id,
-        "tapping a board name previews the part it names");
+        `tapping a board name previews the part it names (on top there: ${at.top})`);
       await touchPage.keyboard.press("Escape");
+      Object.assign(name, at);
     }
     if (names.length) {
-      await touchPage.touchscreen.tap(names[0].x, names[0].y);
-      await touchPage.touchscreen.tap(names[0].x, names[0].y);
+      const first = await nameCenter(names[0].id);
+      await touchPage.touchscreen.tap(first.x, first.y);
+      await touchPage.touchscreen.tap(first.x, first.y);
       assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), names[0].id,
         "tapping the name again inspects that part");
       await touchPage.locator(".close-diff").tap();
+      await touchPage.keyboard.press("Escape");
+    }
+    // A dead-center tap on a changed marker selects that marker, even under a name's hit margin.
+    // Each center is measured right before its tap, because a tap can scroll the page.
+    const markerIds = await touchPage.locator("#tiles .tile:not(.unchanged):not(.metadata)")
+      .evaluateAll((tiles) => tiles.map((tile) => tile.dataset.id));
+    for (const id of markerIds) {
+      const marker = await touchPage.locator(`.tile[data-id=${JSON.stringify(id)}]`).evaluate((tile) => {
+        tile.scrollIntoView({ block: "nearest" });
+        const box = tile.getBoundingClientRect();
+        const x = box.left + box.width / 2, y = box.top + box.height / 2;
+        const inText = (node) => {
+          const text = node.getBoundingClientRect();
+          return x >= text.left && x <= text.right && y >= text.top && y <= text.bottom;
+        };
+        const top = document.elementsFromPoint(x, y).find((node) =>
+          node.matches(".tile") || (node.matches(".board-label") && inText(node)));
+        return { x, y, own: top === tile };
+      });
+      if (!marker.own) continue;
+      await touchPage.touchscreen.tap(marker.x, marker.y);
+      assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), id,
+        "a center tap on a changed board marker previews that marker");
       await touchPage.keyboard.press("Escape");
     }
     // A tap in a cluster lists the changes around it as full-size buttons.
@@ -1703,10 +1762,9 @@ try {
       const strip = await touchPage.locator("#nearby").boundingBox();
       await touchPage.touchscreen.tap(cluster.x, cluster.y);
       const picks = touchPage.locator("#nearby button");
-      await picks.first().waitFor();
+      // The strip is rebuilt just after the tap, and the tapped change leads it.
+      await touchPage.locator(`#nearby button:first-of-type[data-id=${JSON.stringify(cluster.id)}]`).waitFor();
       assert.ok((await picks.count()) >= 2, "a tap in a cluster lists the changes around it");
-      assert.equal(await picks.first().getAttribute("data-id"), cluster.id,
-        "the tapped change leads the nearby list");
       assert.ok(await picks.evaluateAll((buttons) =>
         buttons.every((button) => button.getBoundingClientRect().height >= 44)),
         "nearby changes are full-size touch targets");
