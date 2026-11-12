@@ -790,7 +790,7 @@ try {
       "5V regulator",
       "3V3 regulator",
     ]);
-    await page.locator(".geometry-details summary").click();
+    await page.locator(".geometry-details > summary").click();
     const pad = page.locator(".semantic tr").filter({
       has: page.getByRole("cell", {
         name: "Pad 2",

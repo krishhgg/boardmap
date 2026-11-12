@@ -9,6 +9,7 @@ import {
   isElectrical,
   padGroups,
   padBundles,
+  pairBundles,
   changedPadNumbers,
   changedMechanicalPads,
   rankedNetReach,
@@ -1109,9 +1110,9 @@ function openDiff(p, origin) {
             return td;
           }
           const mine = padBundles(pads),
-            theirs = padBundles(other);
+            pairs = pairBundles(mine, padBundles(other));
           mine.forEach((bundle, index) => {
-            const match = theirs.length === mine.length ? theirs[index] : null;
+            const match = pairs[index];
             const facts = el("dl", undefined, "pad-facts");
             const fact = (label, value, changed) => {
               const dd = el("dd", value, changed ? "changed" : undefined);
@@ -1130,14 +1131,17 @@ function openDiff(p, origin) {
                 value,
                 !match || match.facts.find((f) => f[0] === label)?.[1] !== value,
               );
-            const shown = bundle.at.slice(0, 6).join(" · ");
-            fact(
-              "At, mm",
-              bundle.at.length > 6
-                ? `${shown} · +${bundle.at.length - 6} more`
-                : shown,
-              !match || match.at.join() !== bundle.at.join(),
-            ).title = bundle.at.join("\n");
+            const moved = !match || match.at.join() !== bundle.at.join();
+            const where = fact("At, mm", bundle.at.slice(0, 6).join(" · "), moved);
+            if (bundle.at.length > 6) {
+              // The remaining positions open in place, for keyboard and touch as well.
+              const rest = el("details", undefined, "more-positions");
+              rest.append(
+                el("summary", `+${bundle.at.length - 6} more`),
+                document.createTextNode(bundle.at.slice(6).join(" · ")),
+              );
+              where.append(rest);
+            }
             td.append(facts);
           });
           return td;

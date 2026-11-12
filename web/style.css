@@ -1448,7 +1448,17 @@ footer {
 .pad-facts dd.changed {
   color: inherit;
 }
-.geometry-details summary {
+.more-positions summary {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.more-positions[open] summary {
+  display: none;
+}
+.geometry-details > summary {
   cursor: pointer;
   padding: 12px 0;
   font-size: 12px;

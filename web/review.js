@@ -247,3 +247,20 @@ export function padBundles(pads = []) {
   }
   return [...bundles.values()];
 }
+
+// Pair each bundle with its counterpart in the other revision. Identical descriptions pair
+// first, so an untouched group stays neutral when a neighbor splits. The rest pair in order.
+export function pairBundles(mine, theirs) {
+  const free = [...theirs],
+    pairs = new Array(mine.length).fill(null);
+  mine.forEach((bundle, index) => {
+    const at = free.findIndex(
+      (other) => JSON.stringify(other.facts) === JSON.stringify(bundle.facts),
+    );
+    if (at >= 0) pairs[index] = free.splice(at, 1)[0];
+  });
+  mine.forEach((_, index) => {
+    if (!pairs[index] && free.length) pairs[index] = free.shift();
+  });
+  return pairs;
+}
