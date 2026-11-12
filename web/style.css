@@ -764,6 +764,10 @@ main:has(#diff-panel:not([hidden])) > #impact {
   text-overflow: ellipsis;
   overflow: hidden;
 }
+/* A leading net stays on one line. Its full name is in the tooltip and the diff. */
+#impact > div > .net-reach-list wbr {
+  display: none;
+}
 .net-reach-more {
   grid-column: 2;
   grid-row: 1 / 4;
@@ -834,8 +838,8 @@ main:has(#diff-panel:not([hidden])) > #impact {
   border: 1px solid var(--line);
   background: var(--tile);
 }
+/* The traced part is marked by its white ring, whatever its own color. */
 .reach-key .source {
-  background: var(--orange);
   border-color: transparent;
   outline: 2px solid #fff;
   outline-offset: -1px;
@@ -1305,6 +1309,15 @@ footer {
   font-size: 20px;
   font-weight: 500;
   margin: 0;
+}
+.diff-header small.added {
+  color: var(--green);
+}
+.diff-header small.removed {
+  color: var(--red);
+}
+.diff-header small.modified {
+  color: #daac8c;
 }
 .diff-header small {
   color: var(--muted);

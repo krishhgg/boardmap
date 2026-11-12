@@ -1332,7 +1332,7 @@ function openDiff(p, origin) {
   panel.replaceChildren();
   const head = el("div", undefined, "diff-header"),
     title = el("h2", p.ref);
-  title.append(el("small", p.status));
+  title.append(el("small", p.status, p.status));
   const classification = changeGroup(p);
   if (p.status === "modified" || classification === "Metadata")
     title.append(el(
@@ -1896,9 +1896,11 @@ function renameDisclosure(sheetLabels, netLabels) {
   const total = sheetLabels.length + netLabels.length;
   if (!total) return;
   const counts = [];
-  if (sheetLabels.length) counts.push(`${sheetLabels.length} sheet`);
-  if (netLabels.length) counts.push(`${netLabels.length} net`);
-  const summary = `${counts.join(" · ")} ${total === 1 ? "label" : "labels"} renamed`;
+  if (sheetLabels.length)
+    counts.push(`${sheetLabels.length} ${sheetLabels.length === 1 ? "sheet" : "sheets"}`);
+  if (netLabels.length)
+    counts.push(`${netLabels.length} ${netLabels.length === 1 ? "net" : "nets"}`);
+  const summary = `${counts.join(" · ")} renamed`;
   const toggle = el("button", undefined, "renames-toggle");
   toggle.id = "renames-toggle";
   toggle.type = "button";
