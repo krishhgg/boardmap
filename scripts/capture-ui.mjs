@@ -18,7 +18,7 @@ const demos = {
     part: "ZD1",
   },
 };
-const scenes = ["renames", "inspector", "map", "phone", "motion"];
+const scenes = ["renames", "inspector", "map", "board", "phone", "motion"];
 const [name, repo, out, ...wanted] = process.argv.slice(2),
   demo = demos[name];
 if (!demo || !repo || !out || wanted.some((scene) => !scenes.includes(scene)))
@@ -132,6 +132,22 @@ try {
     await settle(page);
     await shot(page, "sheet-reach");
     await page.close();
+  }
+  if (run("board")) {
+    const page = await desktop();
+    await page.locator("#board-tab").click();
+    await page.mouse.move(1430, 895);
+    await settle(page);
+    await shot(page, "board");
+    await tileFor(page, subject).hover();
+    await settle(page);
+    await shot(page, "board-reach");
+    await page.close();
+    const touch = await phone();
+    await touch.locator("#board-tab").tap();
+    await settle(touch);
+    await shot(touch, "board-phone");
+    await touch.context().close();
   }
   if (run("phone")) {
     const page = await phone();
