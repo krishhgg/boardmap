@@ -177,7 +177,7 @@ try {
       "ffmpeg",
       [
         "-y", "-i", webm, "-filter_complex",
-        "fps=15,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4",
+        "fps=12,scale=880:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle",
         "-loop", "0", join(out, "motion.gif"),
       ],
       { encoding: "utf8" },
