@@ -550,15 +550,20 @@ try {
     "the readout lists every included net across both revisions");
   const netTiers = await page.locator(".net-reach-list li").evaluateAll((nodes) =>
     nodes.map((node) => ({
-      lead: Boolean(node.dataset.change) && Number(node.dataset.count) > 0,
+      rank: Number(node.dataset.rank),
+      rail: Number(node.dataset.count) > 12,
+      changed: Boolean(node.dataset.change) && Number(node.dataset.count) > 0,
       count: Number(node.dataset.count),
     })),
   );
-  assert.deepEqual(netTiers.map((net) => net.lead),
-    [...netTiers.map((net) => net.lead)].sort((a, b) => b - a),
-    "nets the part joined or left lead the readout");
-  for (const lead of [true, false]) {
-    const counts = netTiers.filter((net) => net.lead === lead).map((net) => net.count);
+  assert.deepEqual(netTiers.map((net) => net.rank),
+    netTiers.map((net) => (net.changed ? (net.rail ? 1 : 0) : 2)),
+    "joined or left signal nets rank first, then joined or left rails, then the rest");
+  assert.deepEqual(netTiers.map((net) => net.rank),
+    [...netTiers.map((net) => net.rank)].sort((a, b) => a - b),
+    "the readout lists nets in rank order");
+  for (const rank of [0, 1, 2]) {
+    const counts = netTiers.filter((net) => net.rank === rank).map((net) => net.count);
     assert.deepEqual(counts, [...counts].sort((a, b) => b - a),
       "larger net reach appears first within each tier");
   }
@@ -581,6 +586,17 @@ try {
     assert.equal(await page.locator(`#connections path.${kind}`).count(),
       expectedLinks[kind].filter(drawn).length,
       "every changed connection off the rails has its own curve");
+  }
+  // On a hub with changed links, only those links are drawn and unchanged neighbors lose their ring.
+  const hubTrace = direct.ids.length > 60 &&
+    [...expectedLinks.gained, ...expectedLinks.lost].some(drawn);
+  if (hubTrace) {
+    assert.equal(await page.locator("#connections path:not(.gained):not(.lost)").count(), 0,
+      "a hub trace draws curves for changed connections only");
+    assert.match(await page.locator("#impact p").innerText(), /changed links only/);
+    assert.ok(await page.locator(".tile.affected:not(.gained):not(.lost)").first().evaluate((tile) =>
+      getComputedStyle(tile).boxShadow === "none"),
+      "an unchanged connection on a hub trace has no ring");
   }
   assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
     "rails ringed without curves are marked in the net list");
@@ -1052,8 +1068,8 @@ try {
         assert.match(await page.locator(".classification-note").innerText(), /Verified legacy assembly-metadata migration/);
         await capture("classification");
       } else {
-        assert.match(await page.locator(".diff-summary").innerText(), /Population/);
-        assert.match(await page.locator(".diff-summary").innerText(), /Part identifier/);
+        assert.match(await page.locator(".diff-summary").innerText(), /population/);
+        assert.match(await page.locator(".diff-summary").innerText(), /part identifier/);
       }
       await page.keyboard.press("Escape");
     }
@@ -1589,6 +1605,35 @@ try {
     "outside touch dismisses preview",
   );
   await touchPage.locator("#board-tab").tap();
+  if (populatedBoards.length === 1) {
+    // A touch just beside a small change picks that change.
+    const miss = await touchPage.locator(".tile[data-enlarged]").evaluateAll((tiles) => {
+      const boxes = tiles.map((tile) => tile.getBoundingClientRect());
+      const gap = (box, x, y) => Math.hypot(
+        Math.max(box.left - x, 0, x - box.right), Math.max(box.top - y, 0, y - box.bottom));
+      for (const [index, box] of boxes.entries())
+        for (const [dx, dy] of [[-9, 0], [9, 0], [0, -9], [0, 9]]) {
+          const x = dx < 0 ? box.left + dx : dx > 0 ? box.right + dx : box.left + box.width / 2,
+            y = dy < 0 ? box.top + dy : dy > 0 ? box.bottom + dy : box.top + box.height / 2;
+          if (boxes.every((other, at) => at === index || gap(other, x, y) > gap(box, x, y) + 2) &&
+              !document.elementFromPoint(x, y)?.closest(".tile[data-enlarged]") &&
+              document.elementFromPoint(x, y)?.closest("#tiles"))
+            return { id: tiles[index].dataset.id, x, y };
+        }
+      return null;
+    });
+    if (miss) {
+      await touchPage.touchscreen.tap(miss.x, miss.y);
+      assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), miss.id,
+        "a touch within 22px of a small board change previews that change");
+      assert.ok(await touchPage.locator(".open-preview").isVisible());
+      await touchPage.touchscreen.tap(miss.x, miss.y);
+      assert.equal(await touchPage.locator("#diff-panel").getAttribute("data-id"), miss.id,
+        "a second near touch inspects it");
+      await touchPage.locator(".close-diff").tap();
+      await touchPage.keyboard.press("Escape");
+    }
+  }
   if (populatedBoards.length > 1) {
     await touchPage.locator("#toggle-changes").tap();
     await touchPage.locator("#only-changed").uncheck();

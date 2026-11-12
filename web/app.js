@@ -57,6 +57,7 @@ let report,
   previewReset,
   hoverRetarget,
   lastHoverPoint,
+  lastTouch,
   zoomAnimation;
 const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
@@ -269,6 +270,7 @@ function setScope(scope, from) {
     Object.assign(ghost.style, { width: `${old.width}px`, height: `${old.height}px` });
     for (const tile of ghost.querySelectorAll(".tile"))
       tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed");
+  $("tiles").classList.remove("hub");
   }
   state.scope = scope;
   state.selected = null;
@@ -413,8 +415,8 @@ function renderList() {
       const fields = changeFields(p);
       const summary = el(
         "small",
-        fields.slice(0, 3).join(" · ") +
-          (fields.length > 3 ? ` +${fields.length - 3}` : ""),
+        fields.slice(0, 2).join(" · ") +
+          (fields.length > 2 ? ` +${fields.length - 2}` : ""),
         "row-summary",
       );
       summary.title = fields.join(", ");
@@ -508,15 +510,39 @@ function wirePart(node, p) {
         }
         return;
       }
-      if (state.touchPreview !== p.id) {
-        state.previewOrigin = partOrigin(node);
-        state.touchPreview = p.id;
-        highlight(p.id);
-        return;
-      }
+      touchPart(node, p);
+      return;
     }
     openDiff(p, partOrigin(node));
   };
+}
+// A first touch previews a part. A second touch on the same part inspects it.
+function touchPart(node, p) {
+  if (state.touchPreview === p.id) {
+    openDiff(p, partOrigin(node));
+    return;
+  }
+  state.previewOrigin = partOrigin(node);
+  state.touchPreview = p.id;
+  highlight(p.id);
+}
+// A small board marker is hard to hit with a fingertip. A touch that misses every
+// change picks the nearest one within 22 pixels.
+function nearestChange(x, y) {
+  let best = null,
+    reach = 22;
+  for (const tile of $("tiles").querySelectorAll(".tile[data-enlarged]")) {
+    const box = tile.getBoundingClientRect(),
+      distance = Math.hypot(
+        Math.max(box.left - x, 0, x - box.right),
+        Math.max(box.top - y, 0, y - box.bottom),
+      );
+    if (distance < reach) {
+      reach = distance;
+      best = tile;
+    }
+  }
+  return best;
 }
 function position(node, r, gap = 2) {
   Object.assign(node.style, {
@@ -926,6 +952,8 @@ function renderBoard(shown, w, h) {
 }
 // A net with more loads than this is treated as a rail on a busy trace.
 const railSize = 12;
+// A part with more neighbors than this is traced as a hub.
+const hubSize = 60;
 function highlight(id) {
   cancelPreviewReset();
   cancelHoverRetarget();
@@ -975,9 +1003,16 @@ function highlight(id) {
   const drawable = rails.length
     ? visibleEdges.filter((edge) => lightest.get(edge.target) <= railSize)
     : visibleEdges;
-  const dense = drawable.length > 80;
+  // A hub touches so much that unchanged links bury the changed ones. There, curves are
+  // drawn for the changed connections alone, and unchanged neighbors keep a quiet tint.
+  const hub = result.ids.length > hubSize;
+  $("tiles").classList.toggle("hub", hub);
+  const changedOnly = hub && drawable.some(changed);
+  const dense = !changedOnly && drawable.length > 80;
   const edges = (
-    dense
+    changedOnly
+      ? drawable.filter(changed)
+      : dense
       ? drawable.filter(
           (edge) =>
             changed(edge) ||
@@ -1113,11 +1148,20 @@ function highlight(id) {
   const ringed = rails.length
     ? ` · ${rails.map((net) => net.name.split("/").at(-1)).join(", ")} ringed without curves`
     : "";
+  const which = changedOnly
+    ? " (changed links only)"
+    : dense
+      ? " (changed and electrical links only)"
+      : "";
+  // How the trace is drawn is secondary to what changed, so it reads quieter.
   facts.push(
-    phone
-      ? `${visible} in view · ${outside} outside · ${edges.length} ${curveUnit}${rails.length ? ` · ${rails.length} ${rails.length === 1 ? "rail" : "rails"} ringed` : ""}. `
-      : `${visible} in view${outside ? ` · ${outside} outside this view` : ""} · ${edges.length} ${curveUnit} shown${ringed}${dense ? " (changed and electrical links only)" : ""}. `,
-    state.includeGround ? "Ground included." : "Ground excluded.",
+    el(
+      "span",
+      phone
+        ? `${visible} in view · ${outside} outside · ${edges.length} ${curveUnit}${rails.length ? ` · ${rails.length} ${rails.length === 1 ? "rail" : "rails"} ringed` : ""}. ${state.includeGround ? "Ground included." : "Ground excluded."}`
+        : `${visible} in view${outside ? ` · ${outside} outside this view` : ""} · ${edges.length} ${curveUnit} shown${which}${ringed}. ${state.includeGround ? "Ground included." : "Ground excluded."}`,
+      "drawn",
+    ),
   );
   const body = impact(title, facts, phone ? "" : change, isElectrical(p) ? p.status : "");
   // Nets this part joined or left come first. Each tier is ranked by reach.
@@ -1132,10 +1176,12 @@ function highlight(id) {
   const nets = reachNets
     .map(({ name, ids }) => ({ name, count: ids.length }))
     .map((net) => ({ ...net, change: state.transitive ? "" : own(net.name) }))
-    .sort(
-      (a, b) =>
-        Boolean(b.change && b.count) - Boolean(a.change && a.count),
-    );
+    // Signal nets the part joined or left lead, then joined or left rails, then the rest.
+    .map((net) => ({
+      ...net,
+      rank: net.change && net.count ? (net.count > railSize ? 1 : 0) : 2,
+    }))
+    .sort((a, b) => a.rank - b.rank);
   if (nets.length) {
     const lists = ["Leading net reach", "Remaining net reach"].map((label) => {
       const list = el("ul", undefined, "net-reach-list");
@@ -1149,6 +1195,7 @@ function highlight(id) {
       const row = el("li");
       row.dataset.net = net.name;
       row.dataset.count = net.count;
+      row.dataset.rank = net.rank;
       const label = netLabel(net.name);
       label.title = net.name;
       if (rails.some((rail) => rail.name === net.name)) {
@@ -1213,6 +1260,7 @@ function resetImpact() {
   $("connections").replaceChildren();
   for (const tile of $("tiles").querySelectorAll(".tile"))
     tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed");
+  $("tiles").classList.remove("hub");
   if (state.selected) return;
   // An unchanged idle readout keeps its buttons, and their focus, in place.
   const idle = JSON.stringify([
@@ -1359,7 +1407,8 @@ function openDiff(p, origin) {
       p.status === "modified"
         ? `${pinCount ? `${pinCount} ${pinCount === 1 ? "pin rewired" : "pins rewired"}. ` : ""}${changeFields(p)
             .filter((field) => field !== "pin nets")
-            .map((field) => field[0].toUpperCase() + field.slice(1)).join(", ")}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount ? `${padCount} ${padCount === 1 ? "pad group" : "pad groups"} highlighted.` : ""}`
+            .join(", ")
+            .replace(/^./, (first) => first.toUpperCase())}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount ? `${padCount} ${padCount === 1 ? "pad group" : "pad groups"} highlighted.` : ""}`
         : p.status === "unchanged"
           ? "No semantic changes in this component."
           : `${p.status === "added" ? "Added in head" : "Removed from head"}. All present pads highlighted.`,
@@ -2122,13 +2171,28 @@ async function init() {
         );
     });
     document.addEventListener("pointerdown", (event) => {
+      lastTouch = event.pointerType === "touch";
       if (
-        event.pointerType === "touch" &&
+        lastTouch &&
         state.touchPreview &&
-        !event.target.closest(".tile, .part-row, #impact, .map-settings")
+        !event.target.closest(".tile, .part-row, #impact, .map-settings") &&
+        !(state.view === "board" && nearestChange(event.clientX, event.clientY))
       )
         resetImpact();
     });
+    $("tiles").addEventListener(
+      "click",
+      (event) => {
+        if (state.view !== "board" || !lastTouch || event.detail === 0) return;
+        if (event.target.closest(".tile[data-enlarged]")) return;
+        const near = nearestChange(event.clientX, event.clientY);
+        if (!near) return;
+        event.stopPropagation();
+        event.preventDefault();
+        touchPart(near, parts.get(near.dataset.id));
+      },
+      true,
+    );
     resize = new ResizeObserver(() => {
       const box = $("canvas").getBoundingClientRect(),
         size = `${box.width}:${box.height}`;
