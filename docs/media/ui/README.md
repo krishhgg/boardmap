@@ -19,7 +19,7 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `sidebar/list-phone.png` | 390 × 844 | The expanded phone list uses the same two-line rows and takes most of the screen. |
 | `board/hackrf/board.png`, `board/corne/board.png` | 1440 × 900 | Board layout draws each footprint outline from its pad extents inside a bounding frame. Electrical changes sit on top and carry their references. |
 | `board/hackrf/board-reach.png`, `board/corne/board-reach.png` | 1440 × 900 | A trace in Board layout. |
-| `board/hackrf/board-phone.png` | 390 × 844 | The same view on a phone. |
+| `board/hackrf/board-phone.png`, `board/corne/board-phone.png` | 390 × 844 | The same view on a phone. The canvas takes the board's shape, so Corne's wide board is not left in a strip of empty canvas. |
 | `polish/corne-map.png` | 1440 × 900 | The Metadata legend swatch matches the metadata tiles, and the narrow Root sheet header shows its whole name. |
 | `counts/hackrf-map.png`, `counts/corne-map.png` | 1440 × 900 | The header shows 105 electrical as 67 edits, 9 added and 29 removed, the same three numbers as the legend. Each sheet header splits its count the same way. |
 | `layout/phone-diff.png` | 390 × 844 | A part diff on a phone. |
