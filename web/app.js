@@ -999,6 +999,15 @@ function renderBoard(shown, w, h) {
     placed.push(spot);
     const label = el("span", p.ref, `board-label ${p.status}`);
     Object.assign(label.style, { left: `${spot.x}px`, top: `${spot.y}px` });
+    // A name selects its own part, exactly as its marker does.
+    label.dataset.for = p.id;
+    label.onpointermove = (event) => {
+      if (event.pointerType !== "touch" && state.hover !== p.id) highlight(p.id);
+    };
+    label.onclick = () => {
+      if (lastTouch) touchPart(marker, p);
+      else openDiff(p, partOrigin(marker));
+    };
     marker.after(label);
   }
 }
@@ -1064,7 +1073,11 @@ function highlight(id) {
   // A hub touches so much that unchanged links bury the changed ones. There, curves are
   // drawn for the changed connections alone, and unchanged neighbors keep a quiet tint.
   // Direct reach only. A transitive walk needs its unchanged steps to stay connected.
-  const hub = !state.transitive && result.ids.length > hubSize;
+  // A phone map has a third of the room, so a part counts as a hub there at half the size.
+  const hub =
+    !state.transitive &&
+    result.ids.length >
+      (matchMedia("(max-width: 700px)").matches ? hubSize / 2 : hubSize);
   $("tiles").classList.toggle("hub", hub);
   const changedOnly = hub && drawable.some(changed);
   const dense = !changedOnly && drawable.length > 80;
@@ -2289,7 +2302,7 @@ async function init() {
       if (
         lastTouch &&
         state.touchPreview &&
-        !event.target.closest(".tile, .part-row, #impact, #nearby, .map-settings") &&
+        !event.target.closest(".tile, .board-label, .part-row, #impact, #nearby, .map-settings") &&
         !(state.view === "board" && nearestChange(event.clientX, event.clientY))
       )
         resetImpact();
@@ -2298,6 +2311,11 @@ async function init() {
       "click",
       (event) => {
         if (state.view !== "board" || !lastTouch || event.detail === 0) return;
+        // A touch on a name belongs to that name's part. Its own handler takes it.
+        if (event.target.closest(".board-label")) {
+          setTimeout(() => showNearby(event.clientX, event.clientY));
+          return;
+        }
         // A touch that lands on any changed part means that part.
         const direct = event.target.closest(".tile:not(.unchanged):not(.metadata)");
         const near = direct ?? nearestChange(event.clientX, event.clientY);

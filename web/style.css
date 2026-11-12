@@ -788,6 +788,15 @@ main:has(#diff-panel:not([hidden])) > #impact {
   margin-top: 6px;
   line-height: 16px;
 }
+/* A long net name in this column is cut with an ellipsis. Its tooltip keeps the whole name. */
+.net-reach-more .net-reach-list li span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.net-reach-more .net-reach-list wbr {
+  display: none;
+}
 .net-reach-more .net-reach-list {
   scroll-snap-type: y mandatory;
   scrollbar-width: thin;
@@ -1756,8 +1765,16 @@ footer {
   color: var(--orange);
   font: 500 10px/14px var(--mono);
   white-space: nowrap;
-  pointer-events: none;
+  cursor: pointer;
   transition: opacity 0.12s;
+}
+/* The name is small. Its hit area reaches 6px beyond it on a touch screen. */
+@media (pointer: coarse) {
+  .board-label::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+  }
 }
 .board-label.added {
   color: var(--green);
