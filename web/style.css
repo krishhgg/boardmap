@@ -1053,7 +1053,12 @@ footer {
   font-size: 12px;
 }
 .reach-net h3 {
-  margin: 14px 0 6px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 12px 0 6px;
+  background: var(--panel);
   font: 12px var(--mono);
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -1157,13 +1162,61 @@ footer {
   overflow-wrap: anywhere;
   word-break: normal;
 }
+.semantic th {
+  position: sticky;
+  top: var(--diff-head, 0px);
+  background: var(--panel);
+  box-shadow: inset 0 -1px var(--border);
+  z-index: 3;
+}
 .semantic td:nth-child(2) {
   color: #f4adbc;
-  background: #f0708a06;
+  background: #f0708a0d;
 }
 .semantic td:nth-child(3) {
   color: #93debf;
-  background: #3ecf9806;
+  background: #3ecf980d;
+}
+.semantic td.same,
+.semantic td.absent {
+  color: var(--muted);
+  background: none;
+}
+.semantic td.absent {
+  color: var(--faint);
+}
+/* Long lists scroll inside their disclosure, so the pin table stays within reach. */
+.bounded {
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  /* Keyboard focus lands below the pinned net heading. */
+  scroll-padding-top: 40px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+  background:
+    linear-gradient(var(--panel) 40%, transparent) top / 100% 28px no-repeat
+      local,
+    linear-gradient(transparent, var(--panel) 60%) bottom / 100% 28px no-repeat
+      local,
+    linear-gradient(#000a, transparent) top / 100% 12px no-repeat scroll,
+    linear-gradient(transparent, #000a) bottom / 100% 12px no-repeat scroll;
+}
+.bounded:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.bounded .semantic {
+  margin: 0;
+}
+.bounded .semantic th {
+  top: 0;
+}
+.reach-parts {
+  padding-bottom: 12px;
+}
+.reach-parts .reach-help {
+  margin: 4px 0 0;
 }
 .semantic code {
   white-space: pre-wrap;

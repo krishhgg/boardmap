@@ -636,6 +636,12 @@ try {
   assert.deepEqual(reachedIds, reach(report, candidate.id).ids.sort(),
     "the inspector names every reached part, including loads outside the current view");
   assert.equal(await page.locator('.reach-part[tabindex="0"]').count(), 1);
+  const reachList = await page.locator(".reach-parts").evaluate((node) => ({
+    height: node.getBoundingClientRect().height,
+    overflow: getComputedStyle(node).overflowY,
+  }));
+  assert.ok(reachList.height <= 420 && reachList.overflow === "auto",
+    "a long neighbor list scrolls inside its disclosure instead of pushing the pin table away");
   await capture("reached-parts");
   const reached = page.locator(".reach-part").first();
   const reachedId = await reached.getAttribute("data-id");
@@ -691,6 +697,12 @@ try {
     );
     for (const width of [720, 390]) {
       await page.setViewportSize({ width, height: 844 });
+      // The pinned table header follows the part header's height after a resize.
+      await page.waitForFunction(() => {
+        const panel = document.getElementById("diff-panel");
+        return panel.style.getPropertyValue("--diff-head") ===
+          `${panel.querySelector(".diff-header").offsetHeight}px`;
+      });
       const property = page.getByRole("cell", {
         name: "Property: ManufacturerPartNumber",
         exact: true,
@@ -856,6 +868,10 @@ try {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.keyboard.press("Escape");
   }
+  const tinted = (cells) =>
+    cells.evaluateAll((nodes) =>
+      nodes.filter((node) => getComputedStyle(node).backgroundColor !== "rgba(0, 0, 0, 0)").length,
+    );
   for (const status of ["modified", "added", "removed"]) {
     const row = page.locator(`.part-row.${status}`).first();
     if (await row.count()) {
@@ -865,8 +881,21 @@ try {
         status,
       );
       assert.ok((await page.locator(".semantic tr").count()) > 1);
+      if (status !== "modified") {
+        const missing = status === "added" ? 2 : 3;
+        assert.ok((await page.locator(`.semantic td:nth-child(${missing}).absent`).count()) > 0);
+        assert.equal(await tinted(page.locator(`.semantic td:nth-child(${missing})`)), 0,
+          "the revision without the part carries no diff color");
+      }
       await page.keyboard.press("Escape");
     }
+  }
+  const untouched = report.parts.find((p) => p.status === "unchanged");
+  if (untouched) {
+    await page.locator(`.tile[data-id=${JSON.stringify(untouched.id)}]`).click();
+    assert.equal(await tinted(page.locator(".semantic td")), 0,
+      "an unchanged part's table has no red or green cells");
+    await page.keyboard.press("Escape");
   }
   if (report.head === "3bdc5547004c8244de5f37104410c363854e5634" &&
       report.boards.includes("hardware/hackrf-one/hackrf-one.kicad_pcb")) {
