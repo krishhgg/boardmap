@@ -1639,10 +1639,13 @@ footer {
     display: none;
   }
 }
-@container (max-width: 130px) {
+/* The three-count badge gives way before the sheet's name does. */
+@container (max-width: 180px) {
   .group-title .group-changes {
     display: none;
   }
+}
+@container (max-width: 130px) {
   /* A narrow sheet spends its width on its name. The whole header still opens it. */
   .group-title {
     padding: 0 6px;

@@ -249,6 +249,9 @@ try {
     assert.deepEqual(shown, expected,
       "each sheet header counts electrical edits, added and removed parts as the legend does");
   }
+  assert.ok(await page.locator(".group-title > span:first-child").evaluateAll((names) =>
+    names.every((name) => name.clientWidth >= Math.min(name.scrollWidth, 56))),
+    "a sheet header always leaves room to read its name");
   const split = await page.locator("#stats .split span").evaluateAll((nodes) =>
     nodes.map((node) => parseInt(node.textContent, 10)));
   assert.deepEqual(split, [expectedLegend.electrical, expectedLegend.added, expectedLegend.removed],
