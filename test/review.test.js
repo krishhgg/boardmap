@@ -16,6 +16,7 @@ import {
   padBundles,
   pairBundles,
   footprintExtent,
+  spread,
   changedLinks,
 } from "../web/review.js";
 const part = (changes = [], extra = {}) => ({
@@ -322,4 +323,22 @@ test("mixed-revision reach is neither gained nor lost, and a large rail stays fa
   );
   assert.deepEqual(links, { gained: [], lost: [] });
   assert.ok(performance.now() - began < 400, "each net is expanded once");
+});
+
+test("overlapping markers are nudged apart without straying from their parts", () => {
+  const cluster = [0, 1, 2, 3].map((i) => ({ x: 100 + i, y: 50 + (i % 2), w: 14, h: 14 }));
+  const start = cluster.map((r) => ({ ...r }));
+  spread(cluster);
+  for (let i = 0; i < cluster.length; i++) {
+    assert.ok(Math.abs(cluster[i].x - start[i].x) <= 18 && Math.abs(cluster[i].y - start[i].y) <= 18);
+    for (let j = i + 1; j < cluster.length; j++) {
+      const a = cluster[i], b = cluster[j];
+      assert.ok(a.x + a.w <= b.x + 0.5 || b.x + b.w <= a.x + 0.5 ||
+        a.y + a.h <= b.y + 0.5 || b.y + b.h <= a.y + 0.5, "no two markers overlap");
+    }
+  }
+  const apart = [{ x: 0, y: 0, w: 10, h: 10 }, { x: 40, y: 0, w: 10, h: 10 }];
+  assert.deepEqual(spread(apart.map((r) => ({ ...r }))), apart, "separate markers do not move");
+  const same = spread([{ x: 5, y: 5, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 }]);
+  assert.ok(same[0].x !== same[1].x || same[0].y !== same[1].y, "coincident markers separate");
 });

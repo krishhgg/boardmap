@@ -11,6 +11,7 @@ import {
   padBundles,
   pairBundles,
   footprintExtent,
+  spread,
   changedPadNumbers,
   changedMechanicalPads,
   netReachGroups,
@@ -592,7 +593,7 @@ function renderMap(restore) {
 function buildMap(restore) {
   $("map-scale-note").textContent =
     state.view === "board"
-      ? "Approximate outlines from pad positions and sizes · small parts enlarged · no copper or board edge"
+      ? "Approximate outlines from pads · small changes enlarged and spread · no copper or board edge"
       : "Area follows pad count";
   $("map-scale-note").title =
     state.view === "board"
@@ -833,14 +834,32 @@ function renderBoard(shown, w, h) {
       h: height,
     });
   }
+  // Small electrical changes drawn at their minimum size can land on top of each other.
+  // Those enlarged markers are nudged apart so each one can be seen and picked.
+  const enlarged = new Set(
+    shown
+      .filter(
+        (p) =>
+          isElectrical(p) &&
+          (boxes.get(p.id).w * scale < rects.get(p.id).w ||
+            boxes.get(p.id).h * scale < rects.get(p.id).h),
+      )
+      .map((p) => p.id),
+  );
+  spread([...enlarged].map((id) => rects.get(id)));
   // Larger markers go down first, so a part inside another footprint stays on top and
-  // selectable. Hover does not raise a marker, which keeps that order under the pointer.
+  // selectable. Enlarged changes go last, so a neighbor's marker never hides one. Hover
+  // does not raise a marker, which keeps that order under the pointer.
   const size = (p) => rects.get(p.id).w * rects.get(p.id).h;
   for (const p of [...shown].sort(
-    (a, b) => size(b) - size(a) || isElectrical(a) - isElectrical(b),
+    (a, b) =>
+      enlarged.has(a.id) - enlarged.has(b.id) ||
+      size(b) - size(a) ||
+      isElectrical(a) - isElectrical(b),
   )) {
     if (isElectrical(p)) placed.push(rects.get(p.id));
     tile(p, rects.get(p.id), $("tiles"), 0);
+    if (enlarged.has(p.id)) $("tiles").lastElementChild.dataset.enlarged = "true";
   }
   // Name the changed parts whose markers are too small to hold a reference.
   const clear = (box) =>
@@ -877,11 +896,18 @@ function renderBoard(shown, w, h) {
     const r = rects.get(p.id),
       width = textMetrics.measureText(p.ref).width + 6,
       height = 14;
+    // Beside the marker first, then its corners, then one step farther out.
     const spot = [
       { x: r.x + r.w + 3, y: r.y + r.h / 2 - height / 2 },
       { x: r.x - width - 3, y: r.y + r.h / 2 - height / 2 },
       { x: r.x + r.w / 2 - width / 2, y: r.y - height - 2 },
       { x: r.x + r.w / 2 - width / 2, y: r.y + r.h + 2 },
+      { x: r.x + r.w + 2, y: r.y - height },
+      { x: r.x - width - 2, y: r.y - height },
+      { x: r.x + r.w + 2, y: r.y + r.h },
+      { x: r.x - width - 2, y: r.y + r.h },
+      { x: r.x + r.w / 2 - width / 2, y: r.y - height * 2 - 4 },
+      { x: r.x + r.w / 2 - width / 2, y: r.y + r.h + height + 4 },
     ]
       .map((at) => ({ ...at, w: width, h: height }))
       .find(clear);
