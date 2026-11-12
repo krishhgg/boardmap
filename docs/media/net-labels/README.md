@@ -1,11 +1,11 @@
 # Proved net-label renames
 
-These four PNGs come from the running UI on the real, pinned HackRF PR1411 comparison. They show the current semantic counts after net labels are matched by complete pin membership. The Corne PR and its hero recording are unchanged.
+These four PNGs come from the running UI on the real, pinned HackRF PR1411 comparison. They show the semantic counts after net labels are matched by complete pin membership. They were retaken after the UI pass, so they show the current header, rename panel and layout. The counts and classifications they prove did not change, and neither did the Corne PR counts.
 
 | Capture | Viewport | Evidence |
 | --- | --- | --- |
 | `hackrf-map.png` | 1440 × 900 | 437 head parts, 105 electrical changes, 389 changed parts and 58 unchanged affected parts. |
-| `hackrf-labels.png` | 1440 × 900 | The disclosure names three sheet-label renames and three independently proved net-label renames. |
+| `hackrf-labels.png` | 1440 × 900 | The rename panel names three sheet-label renames and three independently proved net-label renames. |
 | `hackrf-metadata.png` | 1440 × 900 | R62 retains its property changes in Metadata, with no false rewired-pin row. |
 | `hackrf-phone-labels.png` | 390 × 844 | All renamed labels stay inside the phone viewport. |
 
