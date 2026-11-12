@@ -1621,6 +1621,18 @@ footer {
   #impact .open-preview {
     margin-left: 12px;
   }
+  /* The phone readout keeps one height. Starting parts stay on one row and swipe sideways. */
+  #impact {
+    overflow-y: auto;
+  }
+  .reach-start {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .reach-start > * {
+    flex-shrink: 0;
+  }
   #canvas {
     min-height: 380px;
   }

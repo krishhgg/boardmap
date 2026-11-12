@@ -845,7 +845,7 @@ function resetImpact() {
   const body = impact(
     "Trace electrical reach",
     matchMedia("(pointer: coarse)").matches
-      ? "Tap a part to trace every part that shares a net with it in base or head. Tap it again to inspect. Ground excluded by default."
+      ? "Tap a part to trace the parts that share a net with it. Tap again to inspect. Ground excluded."
       : "Hover or focus a part to trace every part that shares a net with it in base or head. Click to inspect. Ground excluded by default.",
   );
   // The idle readout explains the marks a trace is about to draw.

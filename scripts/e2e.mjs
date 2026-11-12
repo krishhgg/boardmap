@@ -1142,6 +1142,16 @@ try {
   };
   await touchTile.waitFor();
   await touchCapture("touch-map");
+  for (const width of [390, 320]) {
+    await touchPage.setViewportSize({ width, height: 844 });
+    assert.ok(await touchPage.locator("#impact").evaluate((box) =>
+      box.scrollHeight <= box.clientHeight + 1),
+      `the idle phone readout holds its sentence, key and starting parts at ${width}px`);
+  }
+  await touchPage.setViewportSize({ width: 390, height: 844 });
+  // Let the resized map finish redrawing before tiles are measured and tapped.
+  await touchPage.evaluate(() =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   if (renamedLabels.length) {
     const pill = await touchPage.locator("#renames-toggle").boundingBox();
     for (const offset of [-20, 20]) {
