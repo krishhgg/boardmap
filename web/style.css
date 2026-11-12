@@ -1705,7 +1705,10 @@ footer {
   .narrow {
     display: inline;
   }
-  /* The idle sentence takes two lines here. Reserve them so a trace does not move the map. */
+}
+/* The idle sentence takes two lines here. Reserve them so a trace does not move the map.
+   Below 901px the single-column readout keeps its own, taller reserve. */
+@media (min-width: 901px) and (max-width: 1150px) {
   #impact {
     min-height: 118px;
   }
