@@ -17,6 +17,9 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `sidebar/list-desktop.png` | 1440 × 900 | Each change takes two lines, so eleven rows fit where eight did. Group headings stay pinned while the list scrolls. The keyboard help is two lines of key caps. |
 | `sidebar/list-selected.png` | 1440 × 900 | The inspected part keeps an orange edge in the list. |
 | `sidebar/list-phone.png` | 390 × 844 | The expanded phone list uses the same two-line rows and takes most of the screen. |
+| `board/hackrf/board.png`, `board/corne/board.png` | 1440 × 900 | Board layout draws each footprint outline from its pad extents inside a bounding frame. Electrical changes sit on top and carry their references. |
+| `board/hackrf/board-reach.png`, `board/corne/board-reach.png` | 1440 × 900 | A trace in Board layout. |
+| `board/hackrf/board-phone.png` | 390 × 844 | The same view on a phone. |
 
 Recordings of drill-in, drill-out and curve motion are on the `pr-assets` branch, outside the installed package and the main history.
 
@@ -29,6 +32,8 @@ node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" docs/media/ui/renames renames
 node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" docs/media/ui/inspector inspector
 node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" docs/media/ui/map/hackrf map phone
 node scripts/capture-ui.mjs corne "$CORNE_CACHE" docs/media/ui/map/corne map
+node scripts/capture-ui.mjs hackrf "$HACKRF_CACHE" docs/media/ui/board/hackrf board
+node scripts/capture-ui.mjs corne "$CORNE_CACHE" docs/media/ui/board/corne board
 ```
 
-The script takes any of the scenes `renames`, `inspector`, `map`, `phone` and `motion`, and captures all of them when none is named. `motion` records the browser and needs FFmpeg to write a GIF.
+The script takes any of the scenes `renames`, `inspector`, `map`, `board`, `phone` and `motion`, and captures all of them when none is named. `motion` records the browser and needs FFmpeg to write a GIF.

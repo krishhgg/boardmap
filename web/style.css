@@ -1503,13 +1503,41 @@ footer {
 [hidden] {
   display: none !important;
 }
-.board-note {
+.board-frame {
   position: absolute;
-  bottom: 8px;
-  left: 8px;
-  font-size: 11px;
-  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d1317;
+}
+.board .tile {
+  border-radius: 1px;
+}
+.board .tile.hovered,
+.board .tile:focus-visible {
+  z-index: auto;
+}
+.board-label {
+  position: absolute;
+  z-index: 1;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: #0a0d10cc;
+  color: var(--orange);
+  font: 500 10px/14px var(--mono);
+  white-space: nowrap;
   pointer-events: none;
+  transition: opacity 0.12s;
+}
+.board-label.added {
+  color: var(--green);
+}
+.board-label.removed {
+  color: var(--red);
+  text-decoration: line-through;
+}
+.tile.dimmed + .board-label {
+  opacity: 0.25;
 }
 .board-chooser {
   height: 100%;
@@ -1554,6 +1582,12 @@ footer {
   }
   .legend .legend-note {
     display: none;
+  }
+  /* The board view's limits stay stated at every width. */
+  .legend .legend-note.board {
+    display: block;
+    flex-basis: 100%;
+    margin-left: 0;
   }
   .toolbar {
     gap: 8px;

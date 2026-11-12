@@ -15,6 +15,7 @@ import {
   padFacts,
   padBundles,
   pairBundles,
+  footprintExtent,
 } from "../web/review.js";
 const part = (changes = [], extra = {}) => ({
   status: "modified",
@@ -271,4 +272,15 @@ test("an edited pad does not mark its untouched neighbors as changed", () => {
   assert.equal(pairs[1], null, "the split-off pad has no counterpart");
   const reordered = pairBundles(padBundles([other, pad(0)]), padBundles([pad(0), other]));
   assert.deepEqual(reordered.map((bundle) => bundle.facts[4][1]), ["B.Cu", "F.Cu"]);
+});
+
+test("a footprint's board extent follows its pads and its rotation", () => {
+  const pads = [
+    { x: -2, y: 0, w: 1, h: 2, angle: 0 },
+    { x: 2, y: 0, w: 1, h: 2, angle: 0 },
+  ];
+  assert.deepEqual(footprintExtent({ angle: 0, pads }), { minX: -2.5, maxX: 2.5, minY: -1, maxY: 1 });
+  const turned = footprintExtent({ angle: 90, pads: pads.map((pad) => ({ ...pad, angle: 90 })) });
+  assert.ok(Math.abs(turned.maxY - 2.5) < 1e-9 && Math.abs(turned.maxX - 1) < 1e-9);
+  assert.deepEqual(footprintExtent({ pads: [] }), { minX: -0.5, maxX: 0.5, minY: -0.5, maxY: 0.5 });
 });
