@@ -77,17 +77,30 @@
         <div class="toolbar">
           <div class="map-settings">
             <label
-              >Reach
-              <select id="reach">
+              ><span class="wide">Reach</span>
+              <select id="reach" aria-label="Reach">
                 <option value="direct">Direct neighbors</option>
                 <option value="transitive">Transitive connectivity</option>
               </select></label
-            ><label><input id="ground" type="checkbox" /> Include ground</label>
+            ><label
+              ><input id="ground" type="checkbox" aria-label="Include ground" />
+              <span class="wide">Include ground</span
+              ><span class="narrow">Ground</span></label
+            >
           </div>
           <div class="view-tabs" role="group" aria-label="View">
-            <button id="map-tab" class="active" aria-pressed="true">
-              Design map</button
-            ><button id="board-tab" aria-pressed="false">Board layout</button>
+            <button
+              id="map-tab"
+              class="active"
+              aria-pressed="true"
+              aria-label="Design map"
+            >
+              <span class="wide">Design map</span
+              ><span class="narrow">Map</span></button
+            ><button id="board-tab" aria-pressed="false" aria-label="Board layout">
+              <span class="wide">Board layout</span
+              ><span class="narrow">Board</span>
+            </button>
           </div>
         </div>
         <div class="location-bar">
