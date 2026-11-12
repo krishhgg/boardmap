@@ -604,9 +604,14 @@ try {
     railed ? direct.ids.filter((id) => !drawn(id)).sort() : [],
     "rail-only neighbors, and only those, give up their ring");
   if (await page.locator("#connections path").count() <= 40)
-    assert.equal(await page.locator("#connections .link-start").count(),
-      await page.locator("#connections path").count(),
-      "each curve has a dot where it leaves the traced part");
+    assert.ok(await page.evaluate(() => {
+      const dots = [...document.querySelectorAll("#connections .link-start")].map((dot) =>
+        [dot.cx.baseVal.value, dot.cy.baseVal.value]);
+      return [...document.querySelectorAll("#connections path")].every((path) => {
+        const start = path.getPointAtLength(0);
+        return dots.some(([x, y]) => Math.hypot(x - start.x, y - start.y) <= 6);
+      });
+    }), "each curve leaves the traced part at a dot");
   assert.equal(await page.locator(".net-reach-list li.rail").count() > 0, railed,
     "rails shown without curves are marked in the net list");
   if (railed)
@@ -1685,6 +1690,29 @@ try {
       await touchPage.locator(".close-diff").tap();
       await touchPage.keyboard.press("Escape");
     }
+    // A dead-center tap on a changed marker selects that marker, even under a name's hit margin.
+    // Each center is measured right before its tap, because a tap can scroll the page.
+    const markerIds = await touchPage.locator("#tiles .tile:not(.unchanged):not(.metadata)")
+      .evaluateAll((tiles) => tiles.map((tile) => tile.dataset.id));
+    for (const id of markerIds) {
+      const marker = await touchPage.locator(`.tile[data-id=${JSON.stringify(id)}]`).evaluate((tile) => {
+        tile.scrollIntoView({ block: "nearest" });
+        const box = tile.getBoundingClientRect();
+        const x = box.left + box.width / 2, y = box.top + box.height / 2;
+        const inText = (node) => {
+          const text = node.getBoundingClientRect();
+          return x >= text.left && x <= text.right && y >= text.top && y <= text.bottom;
+        };
+        const top = document.elementsFromPoint(x, y).find((node) =>
+          node.matches(".tile") || (node.matches(".board-label") && inText(node)));
+        return { x, y, own: top === tile };
+      });
+      if (!marker.own) continue;
+      await touchPage.touchscreen.tap(marker.x, marker.y);
+      assert.equal(await touchPage.locator(".tile.hovered").getAttribute("data-id"), id,
+        "a center tap on a changed board marker previews that marker");
+      await touchPage.keyboard.press("Escape");
+    }
     // A tap in a cluster lists the changes around it as full-size buttons.
     const cluster = await touchPage.locator(".tile[data-enlarged]").evaluateAll((tiles) => {
       const boxes = tiles.map((tile) => tile.getBoundingClientRect());
@@ -1703,10 +1731,9 @@ try {
       const strip = await touchPage.locator("#nearby").boundingBox();
       await touchPage.touchscreen.tap(cluster.x, cluster.y);
       const picks = touchPage.locator("#nearby button");
-      await picks.first().waitFor();
+      // The strip is rebuilt just after the tap, and the tapped change leads it.
+      await touchPage.locator(`#nearby button:first-of-type[data-id=${JSON.stringify(cluster.id)}]`).waitFor();
       assert.ok((await picks.count()) >= 2, "a tap in a cluster lists the changes around it");
-      assert.equal(await picks.first().getAttribute("data-id"), cluster.id,
-        "the tapped change leads the nearby list");
       assert.ok(await picks.evaluateAll((buttons) =>
         buttons.every((button) => button.getBoundingClientRect().height >= 44)),
         "nearby changes are full-size touch targets");

@@ -400,7 +400,7 @@ function renderList() {
     row.classList.toggle("selected", state.selected === p.id);
     row.setAttribute(
       "aria-label",
-      `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}, ${shortFile(p.file)}`,
+      `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} ${rewired === 1 ? "pin" : "pins"} rewired` : ""}, ${shortFile(p.file)}`,
     );
     row.append(el("span", mark(p), "status-mark"));
     const meta = el("span", undefined, "part-meta"),
@@ -623,7 +623,7 @@ function tile(p, r, parent, gap) {
   node.dataset.focusKey = `part:${p.id}`;
   position(node, r, gap);
   const rewired = changedPins(p).length;
-  node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}`);
+  node.setAttribute("aria-label", `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} ${rewired === 1 ? "pin" : "pins"} rewired` : ""}`);
   node.title = `${p.ref} · ${p.value}\n${p.status} · ${Object.keys(p.pins).length} numbered pads\n${p.sheet}`;
   const { fontSize, horizontalPadding, verticalPadding } = referenceLayout(p.ref, r);
   node.style.padding = `${verticalPadding}px ${horizontalPadding}px`;
@@ -1215,7 +1215,8 @@ function highlight(id) {
     );
   }
   const curves = svgEl("g", { mask: "url(#label-mask)" }),
-    starts = svgEl("g");
+    starts = svgEl("g"),
+    startSpots = new Set();
   svg.append(mask, curves, starts);
   const kept = edges.filter(
     (edge) => edge.source !== id || !changed(edge),
@@ -1266,7 +1267,9 @@ function highlight(id) {
         svgEl("circle", { cx: b.x, cy: b.y, r: kind ? 2.5 : 2, class: `link-end${kind}` }),
       );
     // A dot where each curve leaves the traced part shows which tile it starts from.
-    if (edge.source === id && edges.length <= 40)
+    // On a small traced part, dots that share a spot are drawn once, so they do not bury it.
+    const spot = `${Math.round(a.x / 4)}:${Math.round(a.y / 4)}`;
+    if (edge.source === id && edges.length <= 40 && !startSpots.has(spot) && startSpots.add(spot))
       starts.append(
         svgEl("circle", { cx: a.x, cy: a.y, r: 2.5, class: `link-end link-start${kind}` }),
       );
@@ -1480,7 +1483,7 @@ function resetImpact() {
       );
       open.setAttribute(
         "aria-label",
-        `Inspect ${p.ref}, ${rewired ? `${rewired} pins rewired` : p.status}`,
+        `Inspect ${p.ref}, ${rewired ? `${rewired} ${rewired === 1 ? "pin" : "pins"} rewired` : p.status}`,
       );
       open.onclick = () => openDiff(p, { region: "map", key: `part:${p.id}` });
       start.append(open);
