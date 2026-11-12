@@ -737,17 +737,30 @@ main:has(#diff-panel:not([hidden])) > #impact {
   padding-left: 12px;
   font-size: 11px;
 }
+/* Four whole rows, so the list never ends on half a net. */
 .net-reach-more .net-reach-list {
-  height: 76px;
+  height: 82px;
   overflow-y: auto;
   overscroll-behavior: contain;
   flex-direction: column;
   flex-wrap: nowrap;
-  gap: 8px;
+  gap: 6px;
   margin-top: 6px;
+  line-height: 16px;
 }
 .net-reach-more .net-reach-list li {
   flex-shrink: 0;
+}
+.net-reach-list li.gained b,
+#impact p .gained {
+  color: var(--green);
+}
+.net-reach-list li.lost b,
+#impact p .lost {
+  color: var(--red);
+}
+.net-reach-list li b {
+  font-weight: 500;
 }
 #impact .net-reach-list strong {
   flex-shrink: 0;
@@ -760,7 +773,7 @@ main:has(#diff-panel:not([hidden])) > #impact {
   grid-row: 1 / 4;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
   list-style: none;
   margin: 0;
   padding: 2px 0 2px 12px;
@@ -793,12 +806,11 @@ main:has(#diff-panel:not([hidden])) > #impact {
   background: #23374a;
   border-color: var(--blue);
 }
-.reach-key .link {
-  height: 7px;
-  border: 1.5px solid var(--blue);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  background: none;
+.reach-key .gained {
+  border: 2px solid var(--green);
+}
+.reach-key .lost {
+  border: 2px dashed var(--red);
 }
 .reach-key .rest {
   opacity: 0.35;
@@ -925,9 +937,23 @@ main:has(#diff-panel:not([hidden])) > #impact {
   stroke-dasharray: 1;
   animation: draw-link 0.22s ease-out both;
 }
+.link.gained {
+  stroke: var(--green);
+}
+.link.lost {
+  stroke: var(--red);
+  stroke-dasharray: 5 4;
+  animation-name: show-end;
+}
 .link-end {
   fill: var(--blue);
   animation: show-end 0.22s ease-out both;
+}
+.link-end.gained {
+  fill: var(--green);
+}
+.link-end.lost {
+  fill: var(--red);
 }
 @keyframes draw-link {
   from {
@@ -1097,6 +1123,19 @@ main:has(#diff-panel:not([hidden])) > #impact {
   border-color: var(--blue);
   background: #23374a;
   color: #d5e8ff;
+}
+/* A dark hairline keeps the ring legible on orange and green fills. */
+.tile.affected.gained {
+  border-color: var(--green);
+  box-shadow:
+    inset 0 0 0 2px var(--green),
+    inset 0 0 0 3px #0a0d10;
+}
+.tile.affected.lost {
+  border: 1px dashed var(--red);
+  outline: 1px dashed var(--red);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 3px #0a0d10;
 }
 .tile.hovered,
 .tile:focus-visible {

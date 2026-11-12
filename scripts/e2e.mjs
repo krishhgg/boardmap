@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { reach } from "../src/compare.js";
-import { changeGroup, changedPins, footprintExtent, isElectrical } from "../web/review.js";
+import { changeGroup, changedPins, changedLinks, footprintExtent, isElectrical } from "../web/review.js";
 import { buildReport } from "../src/git.js";
 import { serve } from "../src/server.js";
 import { reviewFixture } from "./fixture.mjs";
@@ -244,7 +244,7 @@ try {
     assert.equal((await shown.count()) ? Number(await shown.innerText()) : 0, expected,
       "each sheet header counts its electrical changes");
   }
-  assert.equal(await page.locator(".reach-key li").count(), 4,
+  assert.equal(await page.locator(".reach-key li").count(), 5,
     "the idle readout explains the trace marks");
   const leading = report.parts.filter(isElectrical);
   assert.equal(await page.locator(".start-part").count(), Math.min(3, leading.length));
@@ -520,13 +520,45 @@ try {
   );
   assert.deepEqual(netCounts.map((net) => net.name).sort(), reach(report, candidate.id).nets.sort(),
     "the readout lists every included net across both revisions");
-  assert.deepEqual(netCounts.map((net) => net.count),
-    [...netCounts.map((net) => net.count)].sort((a, b) => b - a),
-    "larger net reach appears first");
+  const netTiers = await page.locator(".net-reach-list li").evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      lead: Boolean(node.dataset.change) && Number(node.dataset.count) > 0,
+      count: Number(node.dataset.count),
+    })),
+  );
+  assert.deepEqual(netTiers.map((net) => net.lead),
+    [...netTiers.map((net) => net.lead)].sort((a, b) => b - a),
+    "nets the part joined or left lead the readout");
+  for (const lead of [true, false]) {
+    const counts = netTiers.filter((net) => net.lead === lead).map((net) => net.count);
+    assert.deepEqual(counts, [...counts].sort((a, b) => b - a),
+      "larger net reach appears first within each tier");
+  }
+  const expectedLinks = changedLinks(report, candidate.id);
+  for (const kind of ["gained", "lost"]) {
+    assert.deepEqual(
+      await page.locator(`.tile.${kind}`).evaluateAll((nodes) => nodes.map((node) => node.dataset.id).sort()),
+      expectedLinks[kind].sort(),
+      `parts connected only in ${kind === "gained" ? "head" : "base"} are marked`);
+    const visibleIds = new Set(await page.locator(".tile").evaluateAll((nodes) => nodes.map((n) => n.dataset.id)));
+    assert.equal(await page.locator(`#connections path.${kind}`).count(),
+      expectedLinks[kind].filter((id) => visibleIds.has(id)).length,
+      "every changed connection in view has its own curve");
+  }
   const leadingNet = await page.locator(".net-reach-list li").first().boundingBox();
   const readout = await page.locator("#impact").boundingBox();
   assert.ok(leadingNet.y >= readout.y && leadingNet.y + leadingNet.height <= readout.y + readout.height,
     "the leading net count is visible without scrolling the readout");
+  assert.ok(await page.evaluate(() => {
+    const canvas = document.getElementById("canvas").getBoundingClientRect();
+    const tiles = [...document.querySelectorAll(".tile:is(.hovered, .affected)")]
+      .map((tile) => tile.getBoundingClientRect());
+    return [...document.querySelectorAll("#label-mask rect[rx]")].every((rect) => {
+      const x = rect.x.baseVal.value + canvas.x, y = rect.y.baseVal.value + canvas.y;
+      return tiles.some((tile) => x >= tile.left - 4 && x + rect.width.baseVal.value <= tile.right + 4 &&
+        y >= tile.top - 2 && y + rect.height.baseVal.value <= tile.bottom + 2);
+    });
+  }), "curves are hidden only behind the visible part of a name");
   const paths = await page.locator("#connections path").count();
   assert.match(
     await page.locator("#impact").innerText(),
@@ -645,11 +677,21 @@ try {
   await hoverPart(tile);
   await capture("reach");
   await page.locator("#reach").selectOption("transitive");
+  await page.mouse.move(1, 1);
+  await previewSettled(null);
+  assert.match(await page.locator(".reach-key").innerText(), /Other structural reach/,
+    "the transitive key does not call mixed-revision reach connected in both");
   await hoverPart(tile);
   assert.match(
     await page.locator("#impact").innerText(),
     /transitively reachable/,
   );
+  const farLinks = changedLinks(report, candidate.id, { transitive: true }),
+    nearIds = new Set(reach(report, candidate.id).ids);
+  assert.ok(
+    (await page.locator("#connections path:is(.gained, .lost)").count()) <=
+      [...farLinks.gained, ...farLinks.lost].filter((id) => nearIds.has(id)).length,
+    "in a transitive trace only curves from the traced part carry revision color");
   await page.locator("#ground").check();
   await hoverPart(tile);
   assert.match(await page.locator("#impact").innerText(), /Ground included/);
