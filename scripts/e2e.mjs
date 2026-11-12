@@ -549,6 +549,16 @@ try {
   const readout = await page.locator("#impact").boundingBox();
   assert.ok(leadingNet.y >= readout.y && leadingNet.y + leadingNet.height <= readout.y + readout.height,
     "the leading net count is visible without scrolling the readout");
+  assert.ok(await page.evaluate(() => {
+    const canvas = document.getElementById("canvas").getBoundingClientRect();
+    const tiles = [...document.querySelectorAll(".tile:is(.hovered, .affected)")]
+      .map((tile) => tile.getBoundingClientRect());
+    return [...document.querySelectorAll("#label-mask rect[rx]")].every((rect) => {
+      const x = rect.x.baseVal.value + canvas.x, y = rect.y.baseVal.value + canvas.y;
+      return tiles.some((tile) => x >= tile.left - 4 && x + rect.width.baseVal.value <= tile.right + 4 &&
+        y >= tile.top - 2 && y + rect.height.baseVal.value <= tile.bottom + 2);
+    });
+  }), "curves are hidden only behind the visible part of a name");
   const paths = await page.locator("#connections path").count();
   assert.match(
     await page.locator("#impact").innerText(),

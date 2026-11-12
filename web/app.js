@@ -885,14 +885,18 @@ function highlight(id) {
     ".tile:is(.hovered, .affected) :is(.ref, .value), .tile:is(.hovered, .affected) + .board-label",
   )) {
     text.selectNodeContents(label);
-    const box = text.getBoundingClientRect();
-    if (box.width)
+    // A name cut by an ellipsis measures wider than it shows. Keep the mask to what is visible.
+    const full = text.getBoundingClientRect(),
+      shown = label.getBoundingClientRect(),
+      left = Math.max(full.left, shown.left) - 3,
+      right = Math.min(full.right, shown.right) + 3;
+    if (right - left > 6)
       mask.append(
         svgEl("rect", {
-          x: box.x - root.x - 3,
-          y: box.y - root.y - 1,
-          width: box.width + 6,
-          height: box.height + 2,
+          x: left - root.x,
+          y: full.y - root.y - 1,
+          width: right - left,
+          height: full.height + 2,
           rx: 2,
           fill: "#000",
         }),
