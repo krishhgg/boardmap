@@ -340,6 +340,19 @@ try {
       );
       assert.equal(await tabStops("#part-list"), 1);
     }
+    if ((await page.locator(".part-row").count()) > 30) {
+      await page.keyboard.press("End");
+      for (let step = 0; step < 24; step++) await page.keyboard.press("ArrowUp");
+      const covered = await page.evaluate(() => {
+        const row = document.activeElement.getBoundingClientRect();
+        return [...document.querySelectorAll(".list-heading")].some((heading) => {
+          const box = heading.getBoundingClientRect();
+          return box.bottom > row.top + 1 && box.top < row.bottom - 1;
+        });
+      });
+      assert.ok(!covered, "a pinned group heading never covers the focused row");
+      await page.keyboard.press("Home");
+    }
     const origin = await page.evaluate(() => document.activeElement.dataset.id);
     await page.keyboard.press("Enter");
     await page.keyboard.press("Escape");
