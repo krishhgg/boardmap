@@ -886,7 +886,7 @@ function openDiff(p, origin) {
   if (context.children.length) panel.append(context);
   const connected = el("details", undefined, "reach-details");
   connected.append(el("summary"));
-  const connectedParts = el("div", undefined, "reach-parts");
+  const connectedParts = el("div", undefined, "reach-parts bounded");
   connectedParts.setAttribute("role", "group");
   connectedParts.setAttribute("aria-label", "Reached parts; arrows and Home or End browse, Enter inspects");
   connected.append(connectedParts);
@@ -940,12 +940,16 @@ function openDiff(p, origin) {
   for (const name of ["Field / pin", "Base", "Head"]) tr.append(el("th", name));
   table.append(tr);
   const geometryTable = table.cloneNode(true);
+  // Only a value that differs carries revision color. Equal and absent sides stay neutral.
   const row = (field, a, b, target = table) => {
     const tr = el("tr");
     tr.append(el("td", field));
+    const same = format(a) === format(b);
     for (const value of [a, b]) {
       const td = el("td");
       td.append(el("code", format(value)));
+      if (same) td.className = "same";
+      else if (format(value) === "∅") td.className = "absent";
       tr.append(td);
     }
     target.append(tr);
@@ -1008,8 +1012,13 @@ function openDiff(p, origin) {
           c.field === "attributes" ? assembly(c.after) : c.after,
         );
     }
-    if (!changes.length)
-      row("Component", "No semantic changes", "No semantic changes");
+    if (!changes.length) {
+      const tr = el("tr"),
+        td = el("td", "No semantic changes between base and head", "same");
+      td.colSpan = 2;
+      tr.append(el("td", "Component"), td);
+      table.append(tr);
+    }
   } else {
     for (const pin of Object.keys(p.pins).sort((a, b) =>
       a.localeCompare(b, undefined, { numeric: true }),
@@ -1032,16 +1041,22 @@ function openDiff(p, origin) {
   panel.append(table);
   if (geometryTable.rows.length > 1) {
     const details = el("details", undefined, "geometry-details");
+    const scroller = el("div", undefined, "bounded");
+    scroller.tabIndex = 0;
+    scroller.setAttribute("role", "group");
+    scroller.setAttribute("aria-label", "Changed pad geometry");
+    scroller.append(geometryTable);
     details.append(
       el(
         "summary",
         `Changed pad geometry · ${geometryTable.rows.length - 1} ${geometryTable.rows.length === 2 ? "pad group" : "pad groups"}`,
       ),
-      geometryTable,
+      scroller,
     );
     panel.append(details);
   }
   panel.scrollTop = 0;
+  panel.style.setProperty("--diff-head", `${head.offsetHeight}px`);
   inspectorImpact(p);
   close.focus({ preventScroll: true });
   if (matchMedia("(max-width: 700px)").matches)
