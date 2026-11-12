@@ -286,3 +286,40 @@ export function footprintExtent(part) {
   }
   return { minX, maxX, minY, maxY };
 }
+
+// Parts connected to this one in only one revision. Kept connections appear in neither list.
+export function changedLinks(
+  report,
+  id,
+  { transitive = false, includeGround = false } = {},
+) {
+  const reached = (key) => {
+    const byPart = new Map();
+    for (const net of Object.values(report.nets)) {
+      if (!includeGround && net.ground) continue;
+      for (const member of net[key]) {
+        if (!byPart.has(member)) byPart.set(member, []);
+        byPart.get(member).push(net[key]);
+      }
+    }
+    const seen = new Set([id]),
+      queue = [id];
+    for (let i = 0; i < queue.length; i++) {
+      for (const members of byPart.get(queue[i]) ?? [])
+        for (const target of members) {
+          if (seen.has(target)) continue;
+          seen.add(target);
+          if (transitive) queue.push(target);
+        }
+      if (!transitive) break;
+    }
+    seen.delete(id);
+    return seen;
+  };
+  const before = reached("before"),
+    after = reached("after");
+  return {
+    gained: [...after].filter((part) => !before.has(part)),
+    lost: [...before].filter((part) => !after.has(part)),
+  };
+}

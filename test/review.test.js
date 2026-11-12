@@ -16,6 +16,7 @@ import {
   padBundles,
   pairBundles,
   footprintExtent,
+  changedLinks,
 } from "../web/review.js";
 const part = (changes = [], extra = {}) => ({
   status: "modified",
@@ -283,4 +284,23 @@ test("a footprint's board extent follows its pads and its rotation", () => {
   const turned = footprintExtent({ angle: 90, pads: pads.map((pad) => ({ ...pad, angle: 90 })) });
   assert.ok(Math.abs(turned.maxY - 2.5) < 1e-9 && Math.abs(turned.maxX - 1) < 1e-9);
   assert.deepEqual(footprintExtent({ pads: [] }), { minX: -0.5, maxX: 0.5, minY: -0.5, maxY: 0.5 });
+});
+
+test("changed links name parts connected in only one revision", () => {
+  const report = {
+    nets: {
+      rail: { before: ["u1", "c1"], after: ["u1", "c1", "c2"] },
+      signal: { before: ["u1", "r1"], after: ["r1"] },
+      moved: { before: ["u1", "r2"], after: ["r2"] },
+      again: { before: ["r2"], after: ["u1", "r2"] },
+      chain: { before: ["r1", "q1"], after: ["c2", "q2"] },
+      gnd: { ground: true, before: ["u1", "g1"], after: ["u1"] },
+    },
+  };
+  assert.deepEqual(changedLinks(report, "u1"), { gained: ["c2"], lost: ["r1"] });
+  assert.deepEqual(changedLinks(report, "u1", { includeGround: true }).lost.sort(), ["g1", "r1"]);
+  const far = changedLinks(report, "u1", { transitive: true });
+  assert.deepEqual(far.gained.sort(), ["c2", "q2"]);
+  assert.deepEqual(far.lost.sort(), ["q1", "r1"]);
+  assert.deepEqual(changedLinks(report, "nowhere"), { gained: [], lost: [] });
 });

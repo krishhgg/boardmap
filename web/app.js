@@ -15,6 +15,7 @@ import {
   changedMechanicalPads,
   rankedNetReach,
   netReachGroups,
+  changedLinks,
 } from "/review.js";
 const $ = (id) => document.getElementById(id);
 const el = (tag, text, className) => {
@@ -257,7 +258,7 @@ function setScope(scope, from) {
     ghost.setAttribute("aria-hidden", "true");
     Object.assign(ghost.style, { width: `${old.width}px`, height: `${old.height}px` });
     for (const tile of ghost.querySelectorAll(".tile"))
-      tile.classList.remove("hovered", "affected", "dimmed");
+      tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed");
   }
   state.scope = scope;
   state.selected = null;
@@ -816,37 +817,45 @@ function highlight(id) {
   if (state.selected) return;
   const p = parts.get(id),
     result = reach(report, id, state),
-    affected = new Set(result.ids);
+    affected = new Set(result.ids),
+    links = changedLinks(report, id, state),
+    gained = new Set(links.gained),
+    lost = new Set(links.lost);
   const root = $("canvas").getBoundingClientRect(),
     centers = new Map();
   for (const tile of $("tiles").querySelectorAll(".tile")) {
-    const r = tile.getBoundingClientRect();
-    centers.set(tile.dataset.id, {
+    const r = tile.getBoundingClientRect(),
+      other = tile.dataset.id;
+    centers.set(other, {
       x: r.x - root.x + r.width / 2,
       y: r.y - root.y + r.height / 2,
       w: r.width,
       h: r.height,
     });
-    tile.classList.toggle("hovered", tile.dataset.id === id);
-    tile.classList.toggle("affected", affected.has(tile.dataset.id));
-    tile.classList.toggle(
-      "dimmed",
-      tile.dataset.id !== id && !affected.has(tile.dataset.id),
-    );
+    tile.classList.toggle("hovered", other === id);
+    tile.classList.toggle("affected", affected.has(other));
+    tile.classList.toggle("gained", gained.has(other));
+    tile.classList.toggle("lost", lost.has(other));
+    tile.classList.toggle("dimmed", other !== id && !affected.has(other));
   }
   const svg = $("connections");
   svg.replaceChildren();
+  // A connection present in only one revision is the change itself, so it is always drawn.
+  const changed = (edge) => gained.has(edge.target) || lost.has(edge.target);
   const visibleEdges = result.edges.filter(
     (edge) => centers.has(edge.source) && centers.has(edge.target),
   );
   const dense = visibleEdges.length > 80;
-  const edges = dense
-    ? visibleEdges.filter(
-        (edge) =>
-          isElectrical(parts.get(edge.target)) ||
-          (edge.source !== id && isElectrical(parts.get(edge.source))),
-      )
-    : visibleEdges;
+  const edges = (
+    dense
+      ? visibleEdges.filter(
+          (edge) =>
+            changed(edge) ||
+            isElectrical(parts.get(edge.target)) ||
+            (edge.source !== id && isElectrical(parts.get(edge.source))),
+        )
+      : visibleEdges
+  ).sort((a, b) => changed(a) - changed(b));
   const borderPoint = (a, b) => {
     const dx = b.x - a.x,
       dy = b.y - a.y;
@@ -861,6 +870,50 @@ function highlight(id) {
     Math.abs(to.x - from.x) / from.w > Math.abs(to.y - from.y) / from.h
       ? { x: Math.sign(to.x - from.x), y: 0 }
       : { x: 0, y: Math.sign(to.y - from.y) };
+  // Curves pass behind the names of the traced part and its neighbors.
+  const mask = svgEl("mask", {
+    id: "label-mask",
+    maskUnits: "userSpaceOnUse",
+    x: 0,
+    y: 0,
+    width: root.width,
+    height: root.height,
+  });
+  mask.append(svgEl("rect", { width: root.width, height: root.height, fill: "#fff" }));
+  const text = document.createRange();
+  for (const label of $("tiles").querySelectorAll(
+    ".tile:is(.hovered, .affected) :is(.ref, .value), .tile:is(.hovered, .affected) + .board-label",
+  )) {
+    text.selectNodeContents(label);
+    const box = text.getBoundingClientRect();
+    if (box.width)
+      mask.append(
+        svgEl("rect", {
+          x: box.x - root.x - 3,
+          y: box.y - root.y - 1,
+          width: box.width + 6,
+          height: box.height + 2,
+          rx: 2,
+          fill: "#000",
+        }),
+      );
+  }
+  // Sheet headers stay readable too. They are controls, not parts of the trace.
+  for (const header of $("tiles").querySelectorAll(".group-title")) {
+    const box = header.getBoundingClientRect();
+    mask.append(
+      svgEl("rect", {
+        x: box.x - root.x,
+        y: box.y - root.y,
+        width: box.width,
+        height: box.height,
+        fill: "#000",
+      }),
+    );
+  }
+  const curves = svgEl("g", { mask: "url(#label-mask)" });
+  svg.append(mask, curves);
+  const kept = edges.filter((edge) => !changed(edge)).length;
   for (const edge of edges) {
     const ca = centers.get(edge.source),
       cb = centers.get(edge.target);
@@ -870,37 +923,73 @@ function highlight(id) {
       back = normal(cb, ca),
       pull = Math.max(10, Math.min(140, Math.hypot(b.x - a.x, b.y - a.y) * 0.45));
     const d = `M ${a.x} ${a.y} C ${a.x + out.x * pull} ${a.y + out.y * pull}, ${b.x + back.x * pull} ${b.y + back.y * pull}, ${b.x} ${b.y}`;
-    svg.append(
-      svgEl("path", {
-        d,
-        class: "link",
-        pathLength: 1,
-        "stroke-width": edges.length > 40 ? 0.9 : edges.length > 12 ? 1.2 : 1.5,
-        opacity: Math.max(
-          0.3,
-          Math.min(0.85, 4.5 / Math.sqrt(edges.length || 1)),
-        ),
-      }),
-    );
-    if (edges.length <= 40)
-      svg.append(svgEl("circle", { cx: b.x, cy: b.y, r: 2, class: "link-end" }));
+    const kind = gained.has(edge.target)
+      ? " gained"
+      : lost.has(edge.target)
+        ? " lost"
+        : "";
+    const path = svgEl("path", {
+      d,
+      class: `link${kind}`,
+      "stroke-width": kind
+        ? edges.length - kept > 24
+          ? 1.2
+          : 1.7
+        : kept > 40
+          ? 0.9
+          : kept > 12
+            ? 1.2
+            : 1.5,
+      opacity: kind
+        ? 0.95
+        : Math.max(
+            0.28,
+            Math.min(kept < edges.length ? 0.5 : 0.85, 4.5 / Math.sqrt(kept || 1)),
+          ),
+    });
+    // The dashed base-only curve cannot also use a dash to draw itself in.
+    if (kind !== " lost") path.setAttribute("pathLength", 1);
+    curves.append(path);
+    if (kind || edges.length <= 40)
+      curves.append(
+        svgEl("circle", { cx: b.x, cy: b.y, r: kind ? 2.5 : 2, class: `link-end${kind}` }),
+      );
   }
-  const visible = result.ids.filter((id) => centers.has(id)).length;
+  const visible = result.ids.filter((id) => centers.has(id)).length,
+    outside = result.ids.length - visible;
   const title = `${p.ref} · ${result.ids.length} ${state.transitive ? `transitively reachable ${result.ids.length === 1 ? "part" : "parts"}` : `shared-net ${result.ids.length === 1 ? "neighbor" : "neighbors"}`}`;
+  const fields = changeFields(p);
   const change = p.status === "modified"
-    ? `Changed: ${changeFields(p).join(", ")}. `
+    ? `Changed: ${fields.slice(0, 3).join(", ")}${fields.length > 3 ? ` +${fields.length - 3}` : ""}. `
     : `${p.status[0].toUpperCase() + p.status.slice(1)}. `;
   const phone = matchMedia("(max-width: 700px)").matches;
-  const netUnit = result.nets.length === 1 ? "net" : "nets";
   const curveUnit = edges.length === 1 ? "curve" : "curves";
-  const facts = phone
-    ? `${result.nets.length} base/head ${netUnit} · ${visible} in view · ${result.ids.length - visible} outside · ${edges.length} ${dense ? "electrical-link " : ""}${curveUnit}. `
-    : `${change}${result.nets.length} ${netUnit} across base/head · ${visible} highlighted in view · ${result.ids.length - visible} outside this view · ${edges.length} ${curveUnit} shown${dense ? " (electrical links only)" : ""}. `;
-  const body = impact(
-    title,
-    `${facts}${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation." : ""}`,
+  const facts = [];
+  if (!phone) facts.push(change);
+  if (gained.size) facts.push(el("span", `${gained.size} only in head`, "gained"), " · ");
+  if (lost.size) facts.push(el("span", `${lost.size} only in base`, "lost"), " · ");
+  facts.push(
+    phone
+      ? `${visible} in view · ${outside} outside · ${edges.length} ${curveUnit}. `
+      : `${visible} in view${outside ? ` · ${outside} outside this view` : ""} · ${edges.length} ${curveUnit} shown${dense ? " (changed and electrical links only)" : ""}. `,
+    `${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation." : ""}`,
   );
-  const nets = rankedNetReach(report, p, result, state.transitive);
+  const body = impact(title, facts);
+  // Nets this part joined or left come first. Each tier is ranked by reach.
+  const own = (name) => {
+    const net = Object.values(report.nets).find(
+      (net) => net.file === p.file && net.name === name,
+    );
+    const before = net?.before.includes(id),
+      after = net?.after.includes(id);
+    return before === after ? "" : after ? "head" : "base";
+  };
+  const nets = rankedNetReach(report, p, result, state.transitive)
+    .map((net) => ({ ...net, change: state.transitive ? "" : own(net.name) }))
+    .sort(
+      (a, b) =>
+        Boolean(b.change && b.count) - Boolean(a.change && a.count),
+    );
   if (nets.length) {
     const lists = ["Leading net reach", "Remaining net reach"].map((label) => {
       const list = el("ul", undefined, "net-reach-list");
@@ -914,6 +1003,12 @@ function highlight(id) {
       row.dataset.count = net.count;
       const label = netLabel(net.name);
       label.title = net.name;
+      if (net.change) {
+        row.dataset.change = net.change;
+        row.className = net.change === "head" ? "gained" : "lost";
+        row.title = `${p.ref} is on this net only in ${net.change}`;
+        row.append(el("b", net.change === "head" ? "+" : "−"));
+      }
       row.append(
         label,
         el("strong", `${net.count} ${net.count === 1 ? "part" : "parts"}`),
@@ -948,7 +1043,8 @@ function impact(title, text) {
   if (count)
     heading.append(count[1], el("span", count[2], "reach-count"), count[3]);
   else heading.textContent = title;
-  const description = el("p", text);
+  const description = el("p");
+  description.append(...[text].flat());
   description.setAttribute("aria-live", "off");
   body.append(heading, description);
   box.append(body);
@@ -961,7 +1057,7 @@ function resetImpact() {
   state.hover = null;
   $("connections").replaceChildren();
   for (const tile of $("tiles").querySelectorAll(".tile"))
-    tile.classList.remove("hovered", "affected", "dimmed");
+    tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed");
   if (state.selected) return;
   // An unchanged idle readout keeps its buttons, and their focus, in place.
   const idle = JSON.stringify([state.scope, state.query]);
@@ -975,14 +1071,19 @@ function resetImpact() {
   // The idle readout explains the marks a trace is about to draw.
   const key = el("ul", undefined, "reach-key");
   key.setAttribute("aria-label", "Trace key");
-  for (const [mark, label] of [
-    ["source", "Traced part"],
-    ["neighbor", "Shares a net"],
-    ["link", "Shared-net link"],
-    ["rest", "No shared net"],
+  for (const [mark, label, short] of [
+    ["source", "Traced part", "Traced"],
+    ["neighbor", "Connected in both", "In both"],
+    ["gained", "Connected only in head", "Head only"],
+    ["lost", "Connected only in base", "Base only"],
+    ["rest", "No shared net", "No shared net"],
   ]) {
     const item = el("li");
-    item.append(el("i", undefined, mark), label);
+    item.append(
+      el("i", undefined, mark),
+      el("span", label, "wide"),
+      el("span", short, "narrow"),
+    );
     key.append(item);
   }
   body.append(key);
