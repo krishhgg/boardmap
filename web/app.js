@@ -337,14 +337,16 @@ function renderList() {
       `${p.ref}, ${p.value}, ${p.status}${kind.toLowerCase() !== p.status ? `, ${kind}` : ""}${rewired ? `, ${rewired} pins rewired` : ""}, ${shortFile(p.file)}`,
     );
     row.append(el("span", mark(p), "status-mark"));
-    const meta = el("span", undefined, "part-meta");
-    meta.append(
+    const meta = el("span", undefined, "part-meta"),
+      line = el("span", undefined, "part-line");
+    line.append(
       el("strong", p.ref),
       el(
         "small",
         `${p.value || p.footprint}${report.boards.length > 1 ? ` · ${shortFile(p.file)}` : ""}`,
       ),
     );
+    meta.append(line);
     if (p.status === "modified") {
       const fields = changeFields(p);
       const summary = el(
