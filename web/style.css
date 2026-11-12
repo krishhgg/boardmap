@@ -1783,7 +1783,7 @@ footer {
   transition: opacity 0.12s;
 }
 /* The name is small. Its hit area reaches 6px beyond it on a touch screen. */
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .board-label::before {
     content: "";
     position: absolute;

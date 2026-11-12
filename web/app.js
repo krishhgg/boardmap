@@ -271,6 +271,8 @@ function setScope(scope, from) {
     for (const tile of ghost.querySelectorAll(".tile"))
       tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed", "railed");
   $("tiles").classList.remove("hub");
+  for (const pick of $("nearby").querySelectorAll("button"))
+    pick.setAttribute("aria-pressed", "false");
   }
   state.scope = scope;
   state.selected = null;
@@ -532,8 +534,7 @@ function showNearby(x, y) {
       };
     })
     .filter((near) => near.distance <= 30)
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, 5);
+    .sort((a, b) => a.distance - b.distance);
   strip.replaceChildren(el("span", close.length > 1 ? "Near your tap" : "Tap a change. Close neighbors are listed here."));
   if (close.length < 2) return;
   for (const { tile } of close) {
@@ -668,7 +669,7 @@ function buildMap(restore) {
   root.classList.toggle("board", state.view === "board");
   $("map-scale-note").classList.toggle("board", state.view === "board");
   $("nearby").hidden = !(
-    state.view === "board" && matchMedia("(pointer: coarse)").matches
+    state.view === "board" && matchMedia("(any-pointer: coarse)").matches
   );
   $("nearby").replaceChildren(el("span", "Tap a change. Close neighbors are listed here."));
   $("connections").replaceChildren();
@@ -996,14 +997,33 @@ function renderBoard(shown, w, h) {
       .map((at) => ({ ...at, w: width, h: height }))
       .find(clear);
     if (!spot) continue;
-    placed.push(spot);
+    // On a touch screen a name's hit area reaches 6px past its text. Reserve that too.
+    const pad = matchMedia("(any-pointer: coarse)").matches ? 6 : 0;
+    placed.push({
+      x: spot.x - pad,
+      y: spot.y - pad,
+      w: spot.w + pad * 2,
+      h: spot.h + pad * 2,
+    });
     const label = el("span", p.ref, `board-label ${p.status}`);
     Object.assign(label.style, { left: `${spot.x}px`, top: `${spot.y}px` });
     // A name selects its own part, exactly as its marker does.
     label.dataset.for = p.id;
+    // Crossing a name on the way to the readout does not retarget. Resting on it does.
     label.onpointermove = (event) => {
-      if (event.pointerType !== "touch" && state.hover !== p.id) highlight(p.id);
+      if (event.pointerType === "touch" || state.hover === p.id) return;
+      if (!state.hover) highlight(p.id);
+      else if (hoverRetarget?.id !== p.id) {
+        cancelHoverRetarget();
+        hoverRetarget = {
+          id: p.id,
+          x: event.clientX,
+          y: event.clientY,
+          timer: setTimeout(() => highlight(p.id), 160),
+        };
+      }
     };
+    label.onpointerleave = cancelHoverRetarget;
     label.onclick = () => {
       if (lastTouch) touchPart(marker, p);
       else openDiff(p, partOrigin(marker));
@@ -1367,6 +1387,8 @@ function resetImpact() {
   for (const tile of $("tiles").querySelectorAll(".tile"))
     tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed", "railed");
   $("tiles").classList.remove("hub");
+  for (const pick of $("nearby").querySelectorAll("button"))
+    pick.setAttribute("aria-pressed", "false");
   if (state.selected) return;
   // An unchanged idle readout keeps its buttons, and their focus, in place.
   const idle = JSON.stringify([
@@ -1808,18 +1830,18 @@ function inspectorImpact(p) {
     "reach-help",
   ));
   // Nets this part joined or left come first, as in the map readout.
-  const membership = (name) => {
-    const net = Object.values(report.nets).find(
-      (net) => net.file === p.file && net.name === name,
-    );
-    if (state.transitive || !net) return "";
-    const before = net.before.includes(p.id),
-      after = net.after.includes(p.id);
-    return before === after ? "" : after ? "head" : "base";
-  };
-  const joinedOrLeft = (name) => Boolean(membership(name));
+  // Looked up once per net, and not at all for a transitive walk.
+  const sides = new Map();
+  if (!state.transitive)
+    for (const net of Object.values(report.nets)) {
+      if (net.file !== p.file) continue;
+      const before = net.before.includes(p.id),
+        after = net.after.includes(p.id);
+      if (before !== after) sides.set(net.name, after ? "head" : "base");
+    }
+  const membership = (name) => sides.get(name) ?? "";
   for (const group of netReachGroups(report, p, result, state.transitive).sort(
-    (a, b) => joinedOrLeft(b.name) - joinedOrLeft(a.name),
+    (a, b) => sides.has(b.name) - sides.has(a.name),
   )) {
     if (!group.ids.length) continue;
     const section = el("section", undefined, "reach-net");
@@ -2323,14 +2345,12 @@ async function init() {
         // A touch that lands on any changed part means that part.
         const direct = event.target.closest(".tile:not(.unchanged):not(.metadata)");
         const near = direct ?? nearestChange(event.clientX, event.clientY);
-        if (!near) return;
-        if (!direct) {
-          event.stopPropagation();
-          event.preventDefault();
-          touchPart(near, parts.get(near.dataset.id));
-        }
-        // List the neighbors once this tap has been handled.
+        // List the neighbors once this tap has been handled, whether or not it picked one.
         setTimeout(() => showNearby(event.clientX, event.clientY));
+        if (!near || direct) return;
+        event.stopPropagation();
+        event.preventDefault();
+        touchPart(near, parts.get(near.dataset.id));
       },
       true,
     );
