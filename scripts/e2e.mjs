@@ -1094,7 +1094,9 @@ try {
   assert.ok(board.smallest >= 11, "electrical changes keep a selectable marker");
   assert.ok(board.areas.every((area, index) => !index || area <= board.areas[index - 1] + 0.5),
     "smaller markers are drawn above larger ones, so a part inside another stays selectable");
-  assert.ok(board.named > 0, "the board names parts");
+  // Outside labels are promised only for electrical changes, so an unchanged board may have none.
+  if (report.parts.some((p) => board.sizes[p.id] && isElectrical(p)))
+    assert.ok(board.named > 0, "the board names its electrical changes");
   // The widest footprint in view keeps its own proportions.
   const widest = report.parts
     .filter((p) => board.sizes[p.id])
