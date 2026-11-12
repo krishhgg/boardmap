@@ -14,6 +14,9 @@ Actual Chromium captures of the running UI on the pinned HackRF PR 1411 and Corn
 | `map/hackrf/map-reach.png`, `map/corne/map-reach.png` | 1440 × 900 | Hovering U17 or ZD1 draws curves that leave and meet tiles square to their edges. |
 | `map/hackrf/sheet.png`, `map/hackrf/sheet-reach.png`, `map/corne/sheet.png`, `map/corne/sheet-reach.png` | 1440 × 900 | A drilled sheet, idle and traced. |
 | `map/hackrf/phone-idle.png`, `map/hackrf/phone-preview.png` | 390 × 844 | The phone readout keeps one height. Idle, it holds the key and the starting parts. After a tap, it holds the trace and the Open diff action. |
+| `sidebar/list-desktop.png` | 1440 × 900 | Each change takes two lines, so eleven rows fit where eight did. Group headings stay pinned while the list scrolls. The keyboard help is two lines of key caps. |
+| `sidebar/list-selected.png` | 1440 × 900 | The inspected part keeps an orange edge in the list. |
+| `sidebar/list-phone.png` | 390 × 844 | The expanded phone list uses the same two-line rows. |
 
 Recordings of drill-in, drill-out and curve motion are on the `pr-assets` branch, outside the installed package and the main history.
 
