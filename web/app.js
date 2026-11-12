@@ -1013,7 +1013,11 @@ function renderBoard(shown, w, h) {
     label.onpointermove = (event) => {
       if (event.pointerType === "touch" || state.hover === p.id) return;
       if (!state.hover) highlight(p.id);
-      else if (hoverRetarget?.id !== p.id) {
+      else if (
+        hoverRetarget?.id !== p.id ||
+        Math.hypot(event.clientX - hoverRetarget.x, event.clientY - hoverRetarget.y) > 4
+      ) {
+        // Like a marker, the wait restarts while the pointer keeps moving.
         cancelHoverRetarget();
         hoverRetarget = {
           id: p.id,
@@ -1024,9 +1028,26 @@ function renderBoard(shown, w, h) {
       }
     };
     label.onpointerleave = cancelHoverRetarget;
-    label.onclick = () => {
-      if (lastTouch) touchPart(marker, p);
-      else openDiff(p, partOrigin(marker));
+    label.onclick = (event) => {
+      if (!lastTouch) {
+        openDiff(p, partOrigin(marker));
+        return;
+      }
+      // The name's hit area reaches past its text. A touch in that margin that lands
+      // squarely on another changed marker belongs to that marker.
+      const text = label.getBoundingClientRect(),
+        margin =
+          event.clientX < text.left ||
+          event.clientX > text.right ||
+          event.clientY < text.top ||
+          event.clientY > text.bottom,
+        under = margin
+          ? document
+              .elementsFromPoint(event.clientX, event.clientY)
+              .find((node) => node.matches(".tile:not(.unchanged):not(.metadata)"))
+          : null;
+      if (under) touchPart(under, parts.get(under.dataset.id));
+      else touchPart(marker, p);
     };
     marker.after(label);
   }
