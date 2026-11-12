@@ -1189,6 +1189,8 @@ footer {
 .bounded {
   max-height: min(46vh, 420px);
   overflow-y: auto;
+  /* Keyboard focus lands below the pinned net heading. */
+  scroll-padding-top: 40px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;

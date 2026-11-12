@@ -697,6 +697,12 @@ try {
     );
     for (const width of [720, 390]) {
       await page.setViewportSize({ width, height: 844 });
+      assert.equal(
+        await page.locator("#diff-panel").evaluate((panel) =>
+          panel.style.getPropertyValue("--diff-head")),
+        `${await page.locator(".diff-header").evaluate((node) => node.offsetHeight)}px`,
+        "the pinned table header follows the part header's height after a resize",
+      );
       const property = page.getByRole("cell", {
         name: "Property: ManufacturerPartNumber",
         exact: true,

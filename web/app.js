@@ -777,7 +777,7 @@ function format(value) {
   return String(value);
 }
 function assembly(value) {
-  if (!Array.isArray(value)) return format(value);
+  if (!Array.isArray(value)) return value;
   const labels = {
     smd: "SMD",
     through_hole: "Through-hole",
@@ -944,12 +944,15 @@ function openDiff(p, origin) {
   const row = (field, a, b, target = table) => {
     const tr = el("tr");
     tr.append(el("td", field));
-    const same = format(a) === format(b);
+    // Presence and equality come from the values, not from how they print.
+    const missing = (value) => value === undefined || value === null;
+    const same =
+      missing(a) === missing(b) && JSON.stringify(a) === JSON.stringify(b);
     for (const value of [a, b]) {
       const td = el("td");
       td.append(el("code", format(value)));
       if (same) td.className = "same";
-      else if (format(value) === "∅") td.className = "absent";
+      else if (missing(value)) td.className = "absent";
       tr.append(td);
     }
     target.append(tr);
@@ -1541,6 +1544,12 @@ async function init() {
     resize.observe($("canvas"));
     window.addEventListener("resize", () => {
       if (!state.selected) return;
+      // The part header changes height across the phone breakpoint.
+      const panel = $("diff-panel");
+      panel.style.setProperty(
+        "--diff-head",
+        `${panel.querySelector(".diff-header").offsetHeight}px`,
+      );
       const p = parts.get(state.selected);
       for (const svg of $("diff-panel").querySelectorAll(".region svg"))
         svg.replaceWith(regionSvg(p, svg.dataset.revision, svg.viewBox.baseVal.width / 2));
