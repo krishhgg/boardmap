@@ -216,6 +216,13 @@ function breadcrumb() {
     }
   }
 }
+// Bring a touch-previewed part into view. Called again once a zoom has settled.
+function revealPreview() {
+  if (!state.touchPreview) return;
+  [...$("tiles").querySelectorAll(".tile")]
+    .find((tile) => tile.dataset.id === state.touchPreview)
+    ?.scrollIntoView({ block: "center" });
+}
 const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
 const groupKey = (key) => `group:${key}`;
@@ -241,6 +248,7 @@ function zoom(frames, ghost, ghostFrames) {
       canvas.classList.remove("zooming");
       // Curves measured under the transform would be misplaced. Redraw them at rest.
       if (state.hover && !state.selected) highlight(state.hover);
+      revealPreview();
     })
     .catch(() => {});
 }
@@ -487,6 +495,16 @@ function wirePart(node, p) {
         sheet = node.closest(".group")?.querySelector(".group-title");
       if (sheet && Math.min(box.width, box.height) < 24) {
         sheet.click();
+        // Keep hold of the tapped part: preview it in its sheet and bring it into view.
+        const opened = [...$("tiles").querySelectorAll(".tile")].find(
+          (tile) => tile.dataset.id === p.id,
+        );
+        if (opened) {
+          state.previewOrigin = partOrigin(opened);
+          state.touchPreview = p.id;
+          highlight(p.id);
+          revealPreview();
+        }
         return;
       }
       if (state.touchPreview !== p.id) {
@@ -588,10 +606,10 @@ function buildMap(restore) {
   const shown = report.parts.filter((p) => inScope(p) && matches(p));
   $("impact").classList.toggle("sheet-scope", Boolean(state.scope?.sheet));
   const removed = shown.filter((p) => p.status === "removed").length;
-  $("scope-count").textContent =
-    `${shown.length} in view${removed ? ` · ${removed} removed` : ""}`;
+  // The legend beside this total splits it by class, so the total stands alone here.
+  $("scope-count").textContent = `${shown.length} in view`;
   $("scope-count").title =
-    `${shown.length} components across both revisions, including ${removed} removed in head`;
+    `${shown.length} components across both revisions, including ${removed} removed from head`;
   $("map-empty").hidden = shown.length > 0;
   const tally = {};
   for (const p of shown) {
@@ -1090,7 +1108,8 @@ function highlight(id) {
     }
   }
   if (state.touchPreview === id) {
-    const open = el("button", `Open ${p.ref} diff`, "open-preview");
+    const open = el("button", "Open diff", "open-preview");
+    open.setAttribute("aria-label", `Open ${p.ref} diff`);
     open.onclick = () => openDiff(p, state.previewOrigin);
     $("impact").append(open);
   }
