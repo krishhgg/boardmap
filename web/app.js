@@ -340,20 +340,28 @@ function renderList() {
         matches(p) &&
         (!$("only-changed").checked || p.status !== "unchanged"),
     )
-    .sort(reviewOrder);
+    // A search for a reference lists that exact part first.
+    .sort(
+      (a, b) =>
+        (b.ref.toLowerCase() === state.query) -
+          (a.ref.toLowerCase() === state.query) || reviewOrder(a, b),
+    );
   $("list-count").textContent = `${shown.length} shown`;
+  // An exact reference match gets a section of its own, so group headings and counts stay true.
+  const exact = (p) => Boolean(state.query) && p.ref.toLowerCase() === state.query;
+  const section = (p) => (exact(p) ? "Exact match" : changeGroup(p));
   let group;
   for (const p of shown) {
     const kind = changeGroup(p);
     const rewired = changedPins(p).length;
-    if (kind !== group) {
-      group = kind;
+    if (section(p) !== group) {
+      group = section(p);
       const heading = el("h3", undefined, "list-heading");
       heading.append(
         el("span", group === "Electrical" ? "Electrical edits" : group),
         el(
           "span",
-          shown.filter((p) => changeGroup(p) === group).length,
+          shown.filter((p) => section(p) === group).length,
           "group-count",
         ),
       );
@@ -362,7 +370,9 @@ function renderList() {
           ? "Pin nets, pads, value, footprint, population or part identifier changes"
           : group === "Metadata"
             ? "Placement, properties, assembly and zero-pad artwork"
-            : group;
+            : group === "Exact match"
+              ? "The reference you searched for"
+              : group;
       list.append(heading);
     }
     const row = el(
@@ -1206,7 +1216,7 @@ function openDiff(p, origin) {
       p.status === "modified"
         ? `${pinCount ? `${pinCount} ${pinCount === 1 ? "pin rewired" : "pins rewired"}. ` : ""}${changeFields(p)
             .filter((field) => field !== "pin nets")
-            .map((field) => field[0].toUpperCase() + field.slice(1)).join(", ")}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount} ${padCount === 1 ? "pad group" : "pad groups"} highlighted.`
+            .map((field) => field[0].toUpperCase() + field.slice(1)).join(", ")}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount ? `${padCount} ${padCount === 1 ? "pad group" : "pad groups"} highlighted.` : ""}`
         : p.status === "unchanged"
           ? "No semantic changes in this component."
           : `${p.status === "added" ? "Added in head" : "Removed from head"}. All present pads highlighted.`,
@@ -1264,7 +1274,7 @@ function openDiff(p, origin) {
     if (connected.open && connected.isConnected && state.selected === p.id)
       inspectorImpact(p);
   };
-  panel.append(connected);
+  panel.append(connected, el("p", undefined, "reach-none"));
   const regions = el("div", undefined, "regions");
   const extent =
     Math.max(
@@ -1483,7 +1493,15 @@ function inspectorImpact(p) {
   const result = reach(report, p.id, state),
     count = result.ids.length;
   const details = $("diff-panel").querySelector(".reach-details");
-  details.querySelector("summary").textContent = `${count} ${state.transitive ? "transitively reachable" : "shared-net"} ${count === 1 ? "neighbor" : "neighbors"} · view parts by net`;
+  // Nothing to open when no part shares a net. A plain line replaces the disclosure.
+  const none = $("diff-panel").querySelector(".reach-none"),
+    reachKind = state.transitive ? "transitively reachable" : "shared-net";
+  details.hidden = !count;
+  none.hidden = Boolean(count);
+  none.textContent = `0 ${reachKind} neighbors`;
+  if (!count) details.open = false;
+  details.querySelector("summary").textContent =
+    `${count} ${reachKind} ${count === 1 ? "neighbor" : "neighbors"} · view parts by net`;
   if (!details.open) return;
   const content = details.querySelector(".reach-parts");
   content.replaceChildren(el(
@@ -1589,9 +1607,18 @@ function regionSvg(selected, key, extent) {
       "font-size": extent / 6,
     });
     label.textContent =
-      key === "before" ? "Not present in base" : "Removed in head";
+      key === "before" ? "Not present in base" : "Removed from head";
     svg.append(label);
     return svg;
+  }
+  if (!anchor.pads.length) {
+    const label = svgEl("text", {
+      "text-anchor": "middle",
+      fill: "#8a9da9",
+      "font-size": extent / 6,
+    });
+    label.textContent = "No pads";
+    svg.append(label);
   }
   const annotations = [];
   for (const p of report.parts) {
