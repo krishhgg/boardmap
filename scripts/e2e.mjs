@@ -550,10 +550,12 @@ try {
   // On a busy trace, a rail with more than 12 loads is ringed without curves.
   const direct = reach(report, candidate.id),
     lightest = new Map();
-  for (const net of netReachGroups(report, candidate, direct))
+  const reachNets = netReachGroups(report, candidate, direct);
+  for (const net of reachNets)
     for (const id of net.ids)
       lightest.set(id, Math.min(lightest.get(id) ?? Infinity, net.ids.length));
-  const railed = direct.ids.length > 30 && [...lightest.values()].some((size) => size > 12);
+  // A rail is any net with more than 12 loads, whether or not it hides a curve.
+  const railed = direct.ids.length > 30 && reachNets.some((net) => net.ids.length > 12);
   const drawn = (id) => !railed || lightest.get(id) <= 12;
   for (const kind of ["gained", "lost"]) {
     assert.deepEqual(

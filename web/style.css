@@ -909,8 +909,15 @@ main:has(#diff-panel:not([hidden])) > #impact {
   #impact {
     min-height: 176px;
   }
-  #impact > div {
+  #impact > div,
+  #impact > div.idle {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* One column here: the starting parts go under the key instead of beside the title. */
+  #impact > div.idle > .reach-start {
+    grid-column: 1;
+    grid-row: auto;
+    margin: 10px 0 0;
   }
   .net-reach-more {
     grid-column: 1;
