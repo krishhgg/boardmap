@@ -1206,7 +1206,7 @@ function openDiff(p, origin) {
       p.status === "modified"
         ? `${pinCount ? `${pinCount} ${pinCount === 1 ? "pin rewired" : "pins rewired"}. ` : ""}${changeFields(p)
             .filter((field) => field !== "pin nets")
-            .map((field) => field[0].toUpperCase() + field.slice(1)).join(", ")}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount} ${padCount === 1 ? "pad group" : "pad groups"} highlighted.`
+            .map((field) => field[0].toUpperCase() + field.slice(1)).join(", ")}${p.changes.some((c) => c.field !== "pins") ? " changed. " : ""}${padCount ? `${padCount} ${padCount === 1 ? "pad group" : "pad groups"} highlighted.` : ""}`
         : p.status === "unchanged"
           ? "No semantic changes in this component."
           : `${p.status === "added" ? "Added in head" : "Removed from head"}. All present pads highlighted.`,
