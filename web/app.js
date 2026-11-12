@@ -13,7 +13,6 @@ import {
   footprintExtent,
   changedPadNumbers,
   changedMechanicalPads,
-  rankedNetReach,
   netReachGroups,
   changedLinks,
 } from "/review.js";
@@ -117,6 +116,7 @@ function wireRoving(root, region) {
 }
 function cancelPreviewReset() {
   clearTimeout(previewReset);
+  previewReset = null;
 }
 function cancelHoverRetarget() {
   clearTimeout(hoverRetarget?.timer);
@@ -126,6 +126,7 @@ function schedulePreviewReset(event) {
   if (event.pointerType === "touch" || state.touchPreview) return;
   cancelPreviewReset();
   previewReset = setTimeout(() => {
+    previewReset = null;
     const focused = document.activeElement;
     if (
       focused.matches(".tile:focus-visible, .part-row:focus-visible") &&
@@ -836,6 +837,8 @@ function renderBoard(shown, w, h) {
     marker.after(label);
   }
 }
+// A net with more loads than this is treated as a rail on a busy trace.
+const railSize = 12;
 function highlight(id) {
   cancelPreviewReset();
   cancelHoverRetarget();
@@ -871,16 +874,30 @@ function highlight(id) {
   const visibleEdges = result.edges.filter(
     (edge) => centers.has(edge.source) && centers.has(edge.target),
   );
-  const dense = visibleEdges.length > 80;
+  // On a busy trace, a rail with many loads is shown by its rings alone. Curves go to the
+  // parts that also share a smaller net with the traced part, where a single link can be followed.
+  const reachNets = netReachGroups(report, p, result, state.transitive),
+    lightest = new Map();
+  for (const net of reachNets)
+    for (const other of net.ids)
+      lightest.set(other, Math.min(lightest.get(other) ?? Infinity, net.ids.length));
+  const rails =
+    !state.transitive && visibleEdges.length > 30
+      ? reachNets.filter((net) => net.ids.length > railSize)
+      : [];
+  const drawable = rails.length
+    ? visibleEdges.filter((edge) => lightest.get(edge.target) <= railSize)
+    : visibleEdges;
+  const dense = drawable.length > 80;
   const edges = (
     dense
-      ? visibleEdges.filter(
+      ? drawable.filter(
           (edge) =>
             changed(edge) ||
             isElectrical(parts.get(edge.target)) ||
             (edge.source !== id && isElectrical(parts.get(edge.source))),
         )
-      : visibleEdges
+      : drawable
   ).sort((a, b) => changed(a) - changed(b));
   const borderPoint = (a, b) => {
     const dx = b.x - a.x,
@@ -908,7 +925,7 @@ function highlight(id) {
   mask.append(svgEl("rect", { width: root.width, height: root.height, fill: "#fff" }));
   const text = document.createRange();
   for (const label of $("tiles").querySelectorAll(
-    ".tile:is(.hovered, .affected) :is(.ref, .value), .tile:is(.hovered, .affected) + .board-label",
+    ".tile:is(.hovered, .affected) :is(.ref, .value, .pin-count), .tile:is(.hovered, .affected) + .board-label",
   )) {
     text.selectNodeContents(label);
     // A name cut by an ellipsis measures wider than it shows. Keep the mask to what is visible.
@@ -996,22 +1013,26 @@ function highlight(id) {
     outside = result.ids.length - visible;
   const title = `${p.ref} · ${result.ids.length} ${state.transitive ? `transitively reachable ${result.ids.length === 1 ? "part" : "parts"}` : `shared-net ${result.ids.length === 1 ? "neighbor" : "neighbors"}`}`;
   const fields = changeFields(p);
-  const change = p.status === "modified"
-    ? `Changed: ${fields.slice(0, 3).join(", ")}${fields.length > 3 ? ` +${fields.length - 3}` : ""}. `
-    : `${p.status[0].toUpperCase() + p.status.slice(1)}. `;
   const phone = matchMedia("(max-width: 700px)").matches;
+  // What changed on the part sits beside its name, in the list's wording.
+  const change =
+    p.status === "modified"
+      ? fields.slice(0, 3).join(" · ") + (fields.length > 3 ? ` +${fields.length - 3}` : "")
+      : p.status;
   const curveUnit = edges.length === 1 ? "curve" : "curves";
   const facts = [];
-  if (!phone) facts.push(change);
   if (gained.size) facts.push(el("span", `${gained.size} only in head`, "gained"), " · ");
   if (lost.size) facts.push(el("span", `${lost.size} only in base`, "lost"), " · ");
+  const ringed = rails.length
+    ? ` · ${rails.map((net) => net.name.split("/").at(-1)).join(", ")} ringed without curves`
+    : "";
   facts.push(
     phone
-      ? `${visible} in view · ${outside} outside · ${edges.length} ${curveUnit}. `
-      : `${visible} in view${outside ? ` · ${outside} outside this view` : ""} · ${edges.length} ${curveUnit} shown${dense ? " (changed and electrical links only)" : ""}. `,
-    `${state.includeGround ? "Ground included." : "Ground excluded."} ${state.transitive ? "Structural reach, not signal propagation." : ""}`,
+      ? `${visible} in view · ${outside} outside · ${edges.length} ${curveUnit}${rails.length ? ` · ${rails.length} ${rails.length === 1 ? "rail" : "rails"} ringed` : ""}. `
+      : `${visible} in view${outside ? ` · ${outside} outside this view` : ""} · ${edges.length} ${curveUnit} shown${ringed}${dense ? " (changed and electrical links only)" : ""}. `,
+    state.includeGround ? "Ground included." : "Ground excluded.",
   );
-  const body = impact(title, facts);
+  const body = impact(title, facts, phone ? "" : change, isElectrical(p) ? p.status : "");
   // Nets this part joined or left come first. Each tier is ranked by reach.
   const own = (name) => {
     const net = Object.values(report.nets).find(
@@ -1021,7 +1042,8 @@ function highlight(id) {
       after = net?.after.includes(id);
     return before === after ? "" : after ? "head" : "base";
   };
-  const nets = rankedNetReach(report, p, result, state.transitive)
+  const nets = reachNets
+    .map(({ name, ids }) => ({ name, count: ids.length }))
     .map((net) => ({ ...net, change: state.transitive ? "" : own(net.name) }))
     .sort(
       (a, b) =>
@@ -1034,15 +1056,21 @@ function highlight(id) {
       list.setAttribute("aria-live", "off");
       return list;
     });
+    // Narrow windows keep the leading nets on one row.
+    const leading = matchMedia("(max-width: 1150px)").matches ? 2 : 3;
     for (const [index, net] of nets.entries()) {
       const row = el("li");
       row.dataset.net = net.name;
       row.dataset.count = net.count;
       const label = netLabel(net.name);
       label.title = net.name;
+      if (rails.some((rail) => rail.name === net.name)) {
+        row.classList.add("rail");
+        row.title = "Every part on this rail is ringed. Curves are drawn for smaller nets.";
+      }
       if (net.change) {
         row.dataset.change = net.change;
-        row.className = net.change === "head" ? "gained" : "lost";
+        row.classList.add(net.change === "head" ? "gained" : "lost");
         row.title = `${p.ref} is on this net only in ${net.change}`;
         row.append(el("b", net.change === "head" ? "+" : "−"));
       }
@@ -1050,7 +1078,7 @@ function highlight(id) {
         label,
         el("strong", `${net.count} ${net.count === 1 ? "part" : "parts"}`),
       );
-      lists[index < 3 ? 0 : 1].append(row);
+      lists[index < leading ? 0 : 1].append(row);
     }
     body.insertBefore(lists[0], body.querySelector("p"));
     if (lists[1].children.length) {
@@ -1068,7 +1096,7 @@ function highlight(id) {
   }
 }
 
-function impact(title, text) {
+function impact(title, text, change, status) {
   const box = $("impact");
   delete box.dataset.idle;
   box.tabIndex = -1;
@@ -1080,6 +1108,8 @@ function impact(title, text) {
   if (count)
     heading.append(count[1], el("span", count[2], "reach-count"), count[3]);
   else heading.textContent = title;
+  if (change) heading.append(el("span", change, `readout-change ${status ?? ""}`));
+  if (state.transitive) heading.title = "Structural reach, not signal propagation.";
   const description = el("p");
   description.append(...[text].flat());
   description.setAttribute("aria-live", "off");
@@ -1097,14 +1127,23 @@ function resetImpact() {
     tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed");
   if (state.selected) return;
   // An unchanged idle readout keeps its buttons, and their focus, in place.
-  const idle = JSON.stringify([state.scope, state.query, state.transitive]);
+  const idle = JSON.stringify([
+    state.scope,
+    state.query,
+    state.transitive,
+    state.includeGround,
+  ]);
   if ($("impact").dataset.idle === idle) return;
+  const touch = matchMedia("(pointer: coarse)").matches,
+    ground = state.includeGround ? "Ground included." : "Ground excluded.";
+  // The transitive caveat is stated here, before a trace, so the trace line stays short.
   const body = impact(
     "Trace electrical reach",
-    matchMedia("(pointer: coarse)").matches
-      ? "Tap a part to trace the parts that share a net with it. Tap again to inspect. Ground excluded."
-      : "Hover or focus a part to trace every part that shares a net with it in base or head. Click to inspect. Ground excluded by default.",
+    state.transitive
+      ? `${touch ? "Tap" : "Hover or focus"} a part to trace everything reachable through shared nets. Structural reach, not signal propagation. ${ground}`
+      : `${touch ? "Tap" : "Hover or focus"} a part to trace the parts that share a net with it. ${touch ? "Tap again" : "Click"} to inspect. ${ground}`,
   );
+  body.classList.add("idle");
   // The idle readout explains the marks a trace is about to draw.
   const key = el("ul", undefined, "reach-key");
   key.setAttribute("aria-label", "Trace key");
@@ -1940,6 +1979,7 @@ async function init() {
       state.includeGround = e.target.checked;
       if (state.selected) inspectorImpact(parts.get(state.selected));
       else if (state.hover) highlight(state.hover);
+      else resetImpact();
     };
     for (const [id, view] of [
       ["map-tab", "map"],
@@ -2013,10 +2053,13 @@ async function init() {
         const focusKey = $("tiles").contains(active)
           ? active.dataset.focusKey
           : null;
+        // The pointer may have left already. A redraw must not keep its trace alive.
+        const leaving = Boolean(previewReset);
         mapSize = size;
         renderMap();
         if (hover) highlight(hover);
         else resetImpact();
+        if (hover && leaving) schedulePreviewReset({});
         if (focusKey)
           [...$("tiles").querySelectorAll("button")]
             .find((button) => button.dataset.focusKey === focusKey)
