@@ -1060,7 +1060,7 @@ function resetImpact() {
     tile.classList.remove("hovered", "affected", "gained", "lost", "dimmed");
   if (state.selected) return;
   // An unchanged idle readout keeps its buttons, and their focus, in place.
-  const idle = JSON.stringify([state.scope, state.query]);
+  const idle = JSON.stringify([state.scope, state.query, state.transitive]);
   if ($("impact").dataset.idle === idle) return;
   const body = impact(
     "Trace electrical reach",
@@ -1071,13 +1071,23 @@ function resetImpact() {
   // The idle readout explains the marks a trace is about to draw.
   const key = el("ul", undefined, "reach-key");
   key.setAttribute("aria-label", "Trace key");
-  for (const [mark, label, short] of [
-    ["source", "Traced part", "Traced"],
-    ["neighbor", "Connected in both", "In both"],
-    ["gained", "Connected only in head", "Head only"],
-    ["lost", "Connected only in base", "Base only"],
-    ["rest", "No shared net", "No shared net"],
-  ]) {
+  // Transitive reach walks both revisions together, so blue there also covers a part
+  // reached only by mixing base and head connections.
+  for (const [mark, label, short] of state.transitive
+    ? [
+        ["source", "Traced part", "Traced"],
+        ["gained", "Reachable only in head", "Head only"],
+        ["lost", "Reachable only in base", "Base only"],
+        ["neighbor", "Other structural reach", "Other reach"],
+        ["rest", "Not reachable", "Not reachable"],
+      ]
+    : [
+        ["source", "Traced part", "Traced"],
+        ["neighbor", "Connected in both", "In both"],
+        ["gained", "Connected only in head", "Head only"],
+        ["lost", "Connected only in base", "Base only"],
+        ["rest", "No shared net", "No shared net"],
+      ]) {
     const item = el("li");
     item.append(
       el("i", undefined, mark),
@@ -1854,6 +1864,7 @@ async function init() {
       state.transitive = e.target.value === "transitive";
       if (state.selected) inspectorImpact(parts.get(state.selected));
       else if (state.hover) highlight(state.hover);
+      else resetImpact();
     };
     $("ground").onchange = (e) => {
       state.includeGround = e.target.checked;

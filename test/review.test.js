@@ -304,3 +304,22 @@ test("changed links name parts connected in only one revision", () => {
   assert.deepEqual(far.lost.sort(), ["q1", "r1"]);
   assert.deepEqual(changedLinks(report, "nowhere"), { gained: [], lost: [] });
 });
+
+test("mixed-revision reach is neither gained nor lost, and a large rail stays fast", () => {
+  const mixed = {
+    nets: {
+      first: { before: ["a", "b"], after: [] },
+      second: { before: [], after: ["b", "c"] },
+    },
+  };
+  assert.deepEqual(changedLinks(mixed, "a", { transitive: true }), { gained: [], lost: ["b"] });
+  const rail = Array.from({ length: 5000 }, (_, i) => `p${i}`);
+  const began = performance.now();
+  const links = changedLinks(
+    { nets: { rail: { before: rail, after: rail } } },
+    "p0",
+    { transitive: true },
+  );
+  assert.deepEqual(links, { gained: [], lost: [] });
+  assert.ok(performance.now() - began < 400, "each net is expanded once");
+});

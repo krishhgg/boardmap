@@ -667,6 +667,10 @@ try {
   await hoverPart(tile);
   await capture("reach");
   await page.locator("#reach").selectOption("transitive");
+  await page.mouse.move(1, 1);
+  await previewSettled(null);
+  assert.match(await page.locator(".reach-key").innerText(), /Other structural reach/,
+    "the transitive key does not call mixed-revision reach connected in both");
   await hoverPart(tile);
   assert.match(
     await page.locator("#impact").innerText(),

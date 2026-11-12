@@ -303,14 +303,19 @@ export function changedLinks(
       }
     }
     const seen = new Set([id]),
-      queue = [id];
+      queue = [id],
+      walked = new Set();
     for (let i = 0; i < queue.length; i++) {
-      for (const members of byPart.get(queue[i]) ?? [])
+      for (const members of byPart.get(queue[i]) ?? []) {
+        // Expand each net once, however many of its members are queued.
+        if (walked.has(members)) continue;
+        walked.add(members);
         for (const target of members) {
           if (seen.has(target)) continue;
           seen.add(target);
           if (transitive) queue.push(target);
         }
+      }
       if (!transitive) break;
     }
     seen.delete(id);
