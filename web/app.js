@@ -216,28 +216,48 @@ function breadcrumb() {
 const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
 const groupKey = (key) => `group:${key}`;
-// Scale the freshly drawn map from, or out to, the group that was drilled.
-function zoom(frames) {
+// The old view and the new one move together, so the opened sheet grows into the
+// canvas and a closed sheet shrinks back into its place.
+function zoom(frames, ghost, ghostFrames) {
   zoomAnimation?.cancel();
+  $("canvas").querySelector(".ghost")?.remove();
   const canvas = $("canvas");
   canvas.classList.add("zooming");
-  const animation = $("tiles").animate(frames, {
-    duration: 240,
-    easing: "cubic-bezier(.2, .8, .2, 1)",
-  });
+  const timing = { duration: 260, easing: "cubic-bezier(.2, .8, .2, 1)" };
+  if (ghost) {
+    canvas.append(ghost);
+    ghost.animate(ghostFrames, { ...timing, fill: "forwards" });
+  }
+  const animation = $("tiles").animate(frames, timing);
   zoomAnimation = animation;
   animation.finished
     .then(() => {
       if (zoomAnimation !== animation) return;
       zoomAnimation = null;
+      ghost?.remove();
       canvas.classList.remove("zooming");
       // Curves measured under the transform would be misplaced. Redraw them at rest.
       if (state.hover && !state.selected) highlight(state.hover);
     })
     .catch(() => {});
 }
+const place = (x, y, sx, sy) =>
+  `translate(${x}px, ${y}px) scale(${sx}, ${sy})`;
 function setScope(scope, from) {
   const previous = state.scope;
+  const animate = !reducedMotion() && state.view === "map" && !state.selected;
+  let ghost, old;
+  if (animate && $("tiles").childElementCount) {
+    old = $("canvas").getBoundingClientRect();
+    ghost = $("tiles").cloneNode(true);
+    ghost.removeAttribute("id");
+    ghost.className = "ghost";
+    ghost.inert = true;
+    ghost.setAttribute("aria-hidden", "true");
+    Object.assign(ghost.style, { width: `${old.width}px`, height: `${old.height}px` });
+    for (const tile of ghost.querySelectorAll(".tile"))
+      tile.classList.remove("hovered", "affected", "dimmed");
+  }
   state.scope = scope;
   state.selected = null;
   $("diff-panel").hidden = true;
@@ -261,27 +281,45 @@ function setScope(scope, from) {
   ).focus({ preventScroll: matchMedia("(max-width: 700px)").matches });
   if (reducedMotion()) return;
   const { width, height } = $("canvas").getBoundingClientRect();
-  const fade = [{ opacity: 0.4 }, { opacity: 1 }];
-  if (from)
-    zoom([
-      {
-        opacity: 0.3,
-        transform: `translate(${from.x}px, ${from.y}px) scale(${from.w / width}, ${from.h / height})`,
-      },
-      { opacity: 1, transform: "none" },
-    ]);
-  else if (returned) {
+  const rest = { opacity: 1, transform: place(0, 0, 1, 1) };
+  if (from && ghost) {
+    const sx = width / from.w,
+      sy = height / from.h;
+    zoom(
+      [
+        { opacity: 0, transform: place(from.x, from.y, 1 / sx, 1 / sy) },
+        { opacity: 1, offset: 0.7 },
+        rest,
+      ],
+      ghost,
+      [rest, { opacity: 0, transform: place(-from.x * sx, -from.y * sy, sx, sy) }],
+    );
+  } else if (returned && ghost) {
     const group = returned.parentElement,
-      sx = Math.min(4, width / group.offsetWidth),
-      sy = Math.min(4, height / group.offsetHeight);
-    zoom([
-      {
-        opacity: 0.3,
-        transform: `scale(${sx}, ${sy}) translate(${-group.offsetLeft}px, ${-group.offsetTop}px)`,
+      to = {
+        x: group.offsetLeft,
+        y: group.offsetTop,
+        w: group.offsetWidth,
+        h: group.offsetHeight,
       },
-      { opacity: 1, transform: "none" },
-    ]);
-  } else zoom(fade);
+      sx = width / to.w,
+      sy = height / to.h;
+    zoom(
+      [
+        { opacity: 0, transform: place(-to.x * sx, -to.y * sy, sx, sy) },
+        { opacity: 1, offset: 0.7 },
+        rest,
+      ],
+      ghost,
+      [
+        rest,
+        {
+          opacity: 0,
+          transform: place(to.x, to.y, to.w / old.width, to.h / old.height),
+        },
+      ],
+    );
+  } else zoom([{ opacity: 0.4 }, { opacity: 1 }]);
 }
 const groupOrder = ["Electrical", "Removed", "Added", "Metadata", "Unchanged"];
 // Electrical edits lead, largest rewire first. The sidebar and the readout share this order.
@@ -431,6 +469,13 @@ function wirePart(node, p) {
   node.onclick = (event) => {
     if (touchClick && event.detail !== 0) {
       touchClick = false;
+      // A fingertip cannot pick one sliver. Open its sheet, where every part is a full target.
+      const box = node.getBoundingClientRect(),
+        sheet = node.closest(".group")?.querySelector(".group-title");
+      if (sheet && Math.min(box.width, box.height) < 24) {
+        sheet.click();
+        return;
+      }
       if (state.touchPreview !== p.id) {
         state.previewOrigin = partOrigin(node);
         state.touchPreview = p.id;
@@ -639,7 +684,7 @@ function buildMap(restore) {
       );
       root.append(node);
     },
-    w < 500 ? 140 : 90,
+    w < 500 ? 112 : 90,
   );
 }
 function renderBoard(shown, w, h) {
@@ -1680,7 +1725,14 @@ async function init() {
       // The open rename panel takes this Escape. The review underneath stays put.
       if ($("renames")?.matches(":popover-open")) return;
       if (state.selected) closeDiff();
-      else resetImpact();
+      else if (state.hover || state.touchPreview || !state.scope) resetImpact();
+      // With nothing traced, Escape steps out of the sheet, then out of the board.
+      else if (!e.target.closest?.("input, select"))
+        setScope(
+          state.scope.sheet && report.boards.length > 1
+            ? { file: state.scope.file }
+            : null,
+        );
     });
     document.addEventListener("pointerdown", (event) => {
       if (

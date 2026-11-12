@@ -584,6 +584,17 @@ select {
   font-size: 11px;
   max-width: 180px;
 }
+.narrow {
+  display: none;
+}
+.ghost {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
 .view-tabs {
   display: flex;
   padding: 2px;
@@ -1619,7 +1630,7 @@ footer {
   }
   #change-controls {
     display: none;
-    max-height: 320px;
+    max-height: min(70dvh, 560px);
   }
   aside.expanded #change-controls {
     display: flex;
@@ -1631,24 +1642,40 @@ footer {
     padding: 0 8px;
     min-height: calc(100dvh - 148px);
   }
+  .wide {
+    display: none;
+  }
+  .narrow {
+    display: inline;
+  }
   .toolbar {
-    min-height: 84px;
+    min-height: 0;
     padding: 8px 0;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
   }
   .map-settings {
-    width: 100%;
-    justify-content: space-between;
+    flex: 1;
+    min-width: 0;
+    gap: 10px;
   }
   select {
-    max-width: 160px;
-  }
-  .view-tabs {
-    width: 100%;
+    max-width: 148px;
   }
   .view-tabs button {
-    flex: 1;
+    padding: 6px 12px;
+  }
+  /* One row does not fit the narrowest phones. The view switch takes its own row there. */
+  @media (max-width: 370px) {
+    .toolbar {
+      flex-wrap: wrap;
+    }
+    .view-tabs {
+      width: 100%;
+    }
+    .view-tabs button {
+      flex: 1;
+    }
   }
   .location-bar {
     min-height: 36px;

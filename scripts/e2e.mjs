@@ -996,7 +996,17 @@ try {
     "sidebar follows the current scope",
   );
   await capture("sheet");
-  await page.locator("#breadcrumbs button").first().click();
+  const depth = () =>
+    page.locator("#breadcrumbs > span").evaluateAll((nodes) =>
+      nodes.filter((node) => node.textContent === "/").length);
+  const drilled = await depth();
+  await page.keyboard.press("Escape");
+  assert.equal(await depth(), drilled, "the first Escape only clears the focused part's trace");
+  assert.equal(await page.locator(".tile.hovered").count(), 0);
+  await page.keyboard.press("Escape");
+  assert.equal(await depth(), 0, "Escape with nothing traced steps out of the drilled group");
+  assert.ok(await page.evaluate(() => document.activeElement.classList.contains("group-title")),
+    "stepping out focuses the group that was open");
   await page.locator("#search").fill(candidate.ref);
   assert.ok((await page.locator(".tile").count()) < report.parts.length);
   await page.locator("#search").fill("no-component-matches-this");
@@ -1117,6 +1127,16 @@ try {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
       `no horizontal overflow at ${width}px`,
+    );
+    assert.ok(
+      await page.evaluate(() => {
+        const boxes = [...document.querySelectorAll(".map-settings label, .view-tabs")]
+          .map((node) => node.getBoundingClientRect());
+        return boxes.every((a, i) => boxes.every((b, j) => i === j ||
+          a.right <= b.left + 1 || b.right <= a.left + 1 ||
+          a.bottom <= b.top + 1 || b.bottom <= a.top + 1));
+      }),
+      `map controls do not overlap at ${width}px`,
     );
   }
   assert.ok(
@@ -1294,6 +1314,9 @@ try {
     "true",
   );
   if (!report.stats.changed) await touchPage.locator("#only-changed").uncheck();
+  if ((await touchPage.locator(".part-row").count()) > 12)
+    assert.ok((await touchPage.locator("#part-list").boundingBox()).height >= 380,
+      "the expanded phone list shows many changes at once");
   await touchPage.locator(".part-row").first().tap();
   assert.ok(
     await touchPage.locator("#map-panel").isVisible(),
@@ -1367,6 +1390,24 @@ try {
 
   if (report.boards.length === 1) {
     await touchPage.locator("#breadcrumbs button").first().tap();
+    const canvasTop = (await touchPage.locator("#canvas").boundingBox()).y;
+    assert.ok(canvasTop <= 422, `the phone map starts in the upper half of the screen, at ${canvasTop}px`);
+    const sliver = await touchPage.locator(".group .tile").evaluateAll((nodes) =>
+      nodes.find((node) => {
+        const box = node.getBoundingClientRect();
+        return Math.min(box.width, box.height) < 20;
+      })?.dataset.id);
+    if (sliver) {
+      await touchPage.locator(`.tile[data-id=${JSON.stringify(sliver)}]`).tap();
+      assert.match(await touchPage.locator("#breadcrumbs").innerText(), /\//,
+        "tapping a part too small for a fingertip opens its sheet");
+      assert.equal(await touchPage.locator(".open-preview").count(), 0);
+      assert.equal(await touchPage.locator(`.tile[data-id=${JSON.stringify(sliver)}]`).count(), 1);
+      const sides = await touchPage.locator(".tile").evaluateAll((nodes) =>
+        nodes.map((node) => Math.min(node.getBoundingClientRect().width, node.getBoundingClientRect().height)));
+      assert.ok(sides.every((side) => side >= 32), "the opened sheet gives every part a full touch target");
+      await touchPage.locator("#breadcrumbs button").first().tap();
+    }
     await touchPage.locator(".group-title").first().tap();
     const targets = await touchPage.locator(".tile").evaluateAll((nodes) => nodes.map((node) => {
       const box = node.getBoundingClientRect();
