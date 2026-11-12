@@ -1185,6 +1185,18 @@ try {
         const box = tile.getBoundingClientRect();
         return box.width * box.height;
       }),
+      overlaps: (() => {
+        // Changes drawn larger than their footprint were spread. Count the pairs still covering each other.
+        const small = tiles
+          .filter((tile) => tile.dataset.enlarged)
+          .map((tile) => tile.getBoundingClientRect());
+        let count = 0;
+        for (let i = 0; i < small.length; i++)
+          for (let j = i + 1; j < small.length; j++)
+            if (small[i].left < small[j].right - 1 && small[j].left < small[i].right - 1 &&
+                small[i].top < small[j].bottom - 1 && small[j].top < small[i].bottom - 1) count++;
+        return count;
+      })(),
       named: tiles.filter((tile) => tile.querySelector(".ref") ||
         tile.nextElementSibling?.classList.contains("board-label")).length,
       sizes: Object.fromEntries(tiles.map((tile) =>
@@ -1193,8 +1205,12 @@ try {
   });
   assert.ok(board.framed, "every footprint sits inside the board frame");
   assert.ok(board.smallest >= 11, "electrical changes keep a selectable marker");
-  assert.ok(board.areas.every((area, index) => !index || area <= board.areas[index - 1] + 0.5),
-    "smaller markers are drawn above larger ones, so a part inside another stays selectable");
+  // Markers run largest to smallest, then the enlarged changes, which start a new run.
+  assert.ok(board.areas.filter((area, index) => index && area > board.areas[index - 1] + 0.5).length <= 1,
+    "smaller markers are drawn above larger ones, with enlarged changes on top");
+  // A cluster too dense for the 18px limit may keep a few overlaps. Most pairs must be clear.
+  assert.ok(board.overlaps <= Math.ceil(board.named / 20),
+    `clustered small changes are spread apart: ${board.overlaps} overlapping pairs`);
   // Outside labels are promised only for electrical changes, so an unchanged board may have none.
   if (report.parts.some((p) => board.sizes[p.id] && isElectrical(p)))
     assert.ok(board.named > 0, "the board names its electrical changes");
@@ -1238,6 +1254,27 @@ try {
     assert.ok(await page.locator("#map-scale-note").isVisible(),
       `the board view states its limits at ${width}px`);
   }
+  // On a phone the canvas takes the board's shape, and labels stay off names drawn in markers.
+  await page.evaluate(() =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const phoneBoard = await page.evaluate(() => {
+    const frame = document.querySelector(".board-frame").getBoundingClientRect(),
+      canvas = document.getElementById("canvas").getBoundingClientRect();
+    const range = document.createRange();
+    const names = [...document.querySelectorAll("#tiles .tile .ref")].map((name) => {
+      range.selectNodeContents(name);
+      return range.getBoundingClientRect();
+    });
+    const covered = [...document.querySelectorAll(".board-label")].filter((label) => {
+      const box = label.getBoundingClientRect();
+      return names.some((name) => box.left < name.right && box.right > name.left &&
+        box.top < name.bottom && box.bottom > name.top);
+    }).length;
+    return { slack: canvas.height - frame.height, height: canvas.height, covered };
+  });
+  assert.ok(phoneBoard.slack <= 190 || phoneBoard.height <= 200,
+    `the phone board canvas follows the board's shape: ${JSON.stringify(phoneBoard)}`);
+  assert.equal(phoneBoard.covered, 0, "no label covers a reference drawn inside a marker");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));

@@ -11,6 +11,7 @@ import {
   padBundles,
   pairBundles,
   footprintExtent,
+  spread,
   changedPadNumbers,
   changedMechanicalPads,
   netReachGroups,
@@ -592,7 +593,7 @@ function renderMap(restore) {
 function buildMap(restore) {
   $("map-scale-note").textContent =
     state.view === "board"
-      ? "Approximate outlines from pad positions and sizes · small parts enlarged · no copper or board edge"
+      ? "Approximate outlines from pads · small changes enlarged and spread · no copper or board edge"
       : "Area follows pad count";
   $("map-scale-note").title =
     state.view === "board"
@@ -623,6 +624,25 @@ function buildMap(restore) {
   const sheetItems = shown.map((p) => ({ p, weight: weight(p) }))
     .sort((a, b) => b.weight - a.weight);
   $("canvas").style.minHeight = "";
+  $("canvas").style.flex = "";
+  $("canvas").style.height = "";
+  // On a phone, a wide board gets a canvas of its own shape instead of empty bands.
+  if (
+    state.view === "board" &&
+    shown.length &&
+    matchMedia("(max-width: 700px)").matches &&
+    new Set(shown.map((p) => p.file)).size === 1
+  ) {
+    const { minX, minY, maxX, maxY } = boardBoxes(shown),
+      width = $("canvas").getBoundingClientRect().width,
+      fit =
+        ((maxY - minY) * (width - 32)) / Math.max(1, maxX - minX) + 72;
+    if (fit < 380) {
+      $("canvas").style.flex = "none";
+      $("canvas").style.minHeight = "0";
+      $("canvas").style.height = `${Math.max(200, Math.ceil(fit))}px`;
+    }
+  }
   if (state.view === "map" && state.scope?.sheet) {
     const box = $("canvas").getBoundingClientRect();
     const phone = matchMedia("(max-width: 700px)").matches;
@@ -742,21 +762,8 @@ function buildMap(restore) {
     w < 500 ? 112 : 90,
   );
 }
-function renderBoard(shown, w, h) {
-  const files = [...new Set(shown.map((p) => p.file))];
-  if (files.length > 1) {
-    const chooser = el("div", undefined, "board-chooser");
-    chooser.append(el("p", "Choose a board to view its physical layout."));
-    for (const file of files) {
-      const button = el("button", file);
-      button.dataset.focusKey = `board:${file}`;
-      button.onclick = () => setScope({ file });
-      chooser.append(button);
-    }
-    $("tiles").append(chooser);
-    return;
-  }
-  // Each marker is the footprint's own outline from its pads, so the view reads as a board.
+// Each footprint's box in board millimeters, and the bounds of them all.
+function boardBoxes(shown) {
   const boxes = new Map();
   let minX = Infinity,
     minY = Infinity,
@@ -776,6 +783,24 @@ function renderBoard(shown, w, h) {
     maxX = Math.max(maxX, box.x + box.w);
     maxY = Math.max(maxY, box.y + box.h);
   }
+  return { boxes, minX, minY, maxX, maxY };
+}
+function renderBoard(shown, w, h) {
+  const files = [...new Set(shown.map((p) => p.file))];
+  if (files.length > 1) {
+    const chooser = el("div", undefined, "board-chooser");
+    chooser.append(el("p", "Choose a board to view its physical layout."));
+    for (const file of files) {
+      const button = el("button", file);
+      button.dataset.focusKey = `board:${file}`;
+      button.onclick = () => setScope({ file });
+      chooser.append(button);
+    }
+    $("tiles").append(chooser);
+    return;
+  }
+  // Each marker is the footprint's own outline from its pads, so the view reads as a board.
+  const { boxes, minX, minY, maxX, maxY } = boardBoxes(shown);
   const margin = w < 500 ? 16 : 28,
     scale = Math.min(
       (w - margin * 2) / Math.max(1, maxX - minX),
@@ -809,14 +834,38 @@ function renderBoard(shown, w, h) {
       h: height,
     });
   }
+  // Small electrical changes drawn at their minimum size can land on top of each other.
+  // Those enlarged markers are nudged apart so each one can be seen and picked.
+  // A long connector that is only thin stays in size order, below the parts inside it.
+  const floor = w < 500 ? 11 : 14;
+  const enlarged = new Set(
+    shown
+      .filter(
+        (p) =>
+          isElectrical(p) &&
+          (boxes.get(p.id).w * scale < rects.get(p.id).w ||
+            boxes.get(p.id).h * scale < rects.get(p.id).h) &&
+          Math.max(rects.get(p.id).w, rects.get(p.id).h) <= floor * 2,
+      )
+      .map((p) => p.id),
+  );
+  spread(
+    [...enlarged].map((id) => rects.get(id)),
+    { bounds: { x: 2, y: 2, w: w - 4, h: h - 4 } },
+  );
   // Larger markers go down first, so a part inside another footprint stays on top and
-  // selectable. Hover does not raise a marker, which keeps that order under the pointer.
+  // selectable. Enlarged changes go last, so a neighbor's marker never hides one. Hover
+  // does not raise a marker, which keeps that order under the pointer.
   const size = (p) => rects.get(p.id).w * rects.get(p.id).h;
   for (const p of [...shown].sort(
-    (a, b) => size(b) - size(a) || isElectrical(a) - isElectrical(b),
+    (a, b) =>
+      enlarged.has(a.id) - enlarged.has(b.id) ||
+      size(b) - size(a) ||
+      isElectrical(a) - isElectrical(b),
   )) {
     if (isElectrical(p)) placed.push(rects.get(p.id));
     tile(p, rects.get(p.id), $("tiles"), 0);
+    if (enlarged.has(p.id)) $("tiles").lastElementChild.dataset.enlarged = "true";
   }
   // Name the changed parts whose markers are too small to hold a reference.
   const clear = (box) =>
@@ -831,6 +880,19 @@ function renderBoard(shown, w, h) {
         box.y < r.y + r.h &&
         box.y + box.h > r.y,
     );
+  // A label never covers a reference drawn inside another marker.
+  const canvasBox = $("canvas").getBoundingClientRect(),
+    inked = document.createRange();
+  for (const name of $("tiles").querySelectorAll(".tile .ref")) {
+    inked.selectNodeContents(name);
+    const box = inked.getBoundingClientRect();
+    placed.push({
+      x: box.x - canvasBox.x - 2,
+      y: box.y - canvasBox.y - 1,
+      w: box.width + 4,
+      h: box.height + 2,
+    });
+  }
   textMetrics.font = `500 10px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
   for (const p of shown.filter(isElectrical).sort(reviewOrder)) {
     const marker = $("tiles").querySelector(
@@ -840,11 +902,18 @@ function renderBoard(shown, w, h) {
     const r = rects.get(p.id),
       width = textMetrics.measureText(p.ref).width + 6,
       height = 14;
+    // Beside the marker first, then its corners, then one step farther out.
     const spot = [
       { x: r.x + r.w + 3, y: r.y + r.h / 2 - height / 2 },
       { x: r.x - width - 3, y: r.y + r.h / 2 - height / 2 },
       { x: r.x + r.w / 2 - width / 2, y: r.y - height - 2 },
       { x: r.x + r.w / 2 - width / 2, y: r.y + r.h + 2 },
+      { x: r.x + r.w + 2, y: r.y - height },
+      { x: r.x - width - 2, y: r.y - height },
+      { x: r.x + r.w + 2, y: r.y + r.h },
+      { x: r.x - width - 2, y: r.y + r.h },
+      { x: r.x + r.w / 2 - width / 2, y: r.y - height * 2 - 4 },
+      { x: r.x + r.w / 2 - width / 2, y: r.y + r.h + height + 4 },
     ]
       .map((at) => ({ ...at, w: width, h: height }))
       .find(clear);

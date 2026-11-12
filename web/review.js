@@ -328,3 +328,66 @@ export function changedLinks(
     lost: [...before].filter((part) => !after.has(part)),
   };
 }
+
+// Nudge overlapping boxes apart along the line between their centers. Each box moves at
+// most `limit` from where it started, so a marker stays beside the part it stands for,
+// and stays inside `bounds` when they are given.
+export function spread(
+  rects,
+  // A board with hundreds of small changes gets fewer passes, which keeps a redraw quick.
+  { gap = 2, limit = 18, rounds = rects.length > 600 ? 24 : 120, bounds } = {},
+) {
+  const home = rects.map((r) => ({ x: r.x, y: r.y }));
+  const order = rects.map((_, index) => index);
+  for (let round = 0; round < rounds; round++) {
+    const before = rects.map((r) => r.x + r.y);
+    // Only boxes close along x can overlap, so a sweep in x order skips the rest.
+    order.sort((a, b) => rects[a].x - rects[b].x);
+    for (let m = 0; m < order.length; m++) {
+      const i = order[m],
+        a = rects[i];
+      for (let n = m + 1; n < order.length; n++) {
+        const j = order[n],
+          b = rects[j];
+        if (b.x >= a.x + a.w + gap) break;
+        const dx = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + gap,
+          dy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + gap;
+        if (dx <= 0.01 || dy <= 0.01) continue;
+        let ux = b.x + b.w / 2 - (a.x + a.w / 2),
+          uy = b.y + b.h / 2 - (a.y + a.h / 2);
+        const length = Math.hypot(ux, uy);
+        if (length < 0.01) {
+          // Boxes that share a center leave in a direction fixed by their order.
+          const angle = (i + j) * 2.399963;
+          ux = Math.cos(angle);
+          uy = Math.sin(angle);
+        } else {
+          ux /= length;
+          uy /= length;
+        }
+        // The shortest slide along that line that clears one axis.
+        const need = Math.min(
+          Math.abs(ux) > 0.01 ? dx / Math.abs(ux) : Infinity,
+          Math.abs(uy) > 0.01 ? dy / Math.abs(uy) : Infinity,
+        );
+        a.x -= (ux * need) / 2;
+        a.y -= (uy * need) / 2;
+        b.x += (ux * need) / 2;
+        b.y += (uy * need) / 2;
+      }
+    }
+    let shift = 0;
+    rects.forEach((r, i) => {
+      r.x = Math.max(home[i].x - limit, Math.min(home[i].x + limit, r.x));
+      r.y = Math.max(home[i].y - limit, Math.min(home[i].y + limit, r.y));
+      if (bounds) {
+        r.x = Math.max(bounds.x, Math.min(bounds.x + bounds.w - r.w, r.x));
+        r.y = Math.max(bounds.y, Math.min(bounds.y + bounds.h - r.h, r.y));
+      }
+      shift = Math.max(shift, Math.abs(r.x + r.y - before[i]));
+    });
+    // Settled, or a cluster too dense to move farther. Either way another round changes nothing.
+    if (shift < 0.05) break;
+  }
+  return rects;
+}
