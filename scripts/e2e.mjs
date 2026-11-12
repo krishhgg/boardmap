@@ -1317,13 +1317,17 @@ try {
   );
   if (report.boards.length === 1) {
     await goHome(page);
-    for (const group of await page.locator(".group-title").all()) {
-      const box = await group.boundingBox();
-      assert.ok(
-        box.width >= 60 && box.height >= 24,
-        "small sheets retain visible drill targets",
-      );
-    }
+    // Measure in one pass, after the resized map has redrawn.
+    await page.evaluate(() =>
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.ok(
+      await page.locator(".group-title").evaluateAll((titles) =>
+        titles.every((title) => {
+          const box = title.getBoundingClientRect();
+          return box.width >= 60 && box.height >= 24;
+        })),
+      "small sheets retain visible drill targets",
+    );
   }
   await capture("mobile");
   const touch = await browser.newContext({
