@@ -52,7 +52,8 @@ let report,
   mapSize = "",
   previewReset,
   hoverRetarget,
-  lastHoverPoint;
+  lastHoverPoint,
+  zoomAnimation;
 const textMetrics = document.createElement("canvas").getContext("2d");
 const weight = (p) => Math.max(3, Object.keys(p.pins).length);
 const shortFile = (file) => file.split("/").at(-1).replace(".kicad_pcb", "");
@@ -210,7 +211,31 @@ function breadcrumb() {
     }
   }
 }
-function setScope(scope) {
+const reducedMotion = () =>
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+const groupKey = (key) => `group:${key}`;
+// Scale the freshly drawn map from, or out to, the group that was drilled.
+function zoom(frames) {
+  zoomAnimation?.cancel();
+  const canvas = $("canvas");
+  canvas.classList.add("zooming");
+  const animation = $("tiles").animate(frames, {
+    duration: 240,
+    easing: "cubic-bezier(.2, .8, .2, 1)",
+  });
+  zoomAnimation = animation;
+  animation.finished
+    .then(() => {
+      if (zoomAnimation !== animation) return;
+      zoomAnimation = null;
+      canvas.classList.remove("zooming");
+      // Curves measured under the transform would be misplaced. Redraw them at rest.
+      if (state.hover && !state.selected) highlight(state.hover);
+    })
+    .catch(() => {});
+}
+function setScope(scope, from) {
+  const previous = state.scope;
   state.scope = scope;
   state.selected = null;
   $("diff-panel").hidden = true;
@@ -219,19 +244,50 @@ function setScope(scope) {
   renderList();
   renderMap();
   resetImpact();
+  // Leaving a board or sheet returns to the group that was opened.
+  const left =
+    previous && !scope?.sheet
+      ? [previous.sheet, previous.file].filter(Boolean).map(groupKey)
+      : [];
+  const returned = [...$("tiles").querySelectorAll(".group-title")].find(
+    (title) => left.includes(title.dataset.focusKey),
+  );
   (
+    returned ??
     $("tiles").querySelector(".tile, .board-chooser button") ??
     $("breadcrumbs").querySelector("button")
   ).focus({ preventScroll: matchMedia("(max-width: 700px)").matches });
-  if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
-    $("tiles").animate(
-      [
-        { opacity: 0.4, transform: "scale(.98)" },
-        { opacity: 1, transform: "scale(1)" },
-      ],
-      { duration: 180, easing: "ease-out" },
-    );
+  if (reducedMotion()) return;
+  const { width, height } = $("canvas").getBoundingClientRect();
+  const fade = [{ opacity: 0.4 }, { opacity: 1 }];
+  if (from)
+    zoom([
+      {
+        opacity: 0.3,
+        transform: `translate(${from.x}px, ${from.y}px) scale(${from.w / width}, ${from.h / height})`,
+      },
+      { opacity: 1, transform: "none" },
+    ]);
+  else if (returned) {
+    const group = returned.parentElement,
+      sx = Math.min(4, width / group.offsetWidth),
+      sy = Math.min(4, height / group.offsetHeight);
+    zoom([
+      {
+        opacity: 0.3,
+        transform: `scale(${sx}, ${sy}) translate(${-group.offsetLeft}px, ${-group.offsetTop}px)`,
+      },
+      { opacity: 1, transform: "none" },
+    ]);
+  } else zoom(fade);
 }
+const groupOrder = ["Electrical", "Removed", "Added", "Metadata", "Unchanged"];
+// Electrical edits lead, largest rewire first. The sidebar and the readout share this order.
+const reviewOrder = (a, b) =>
+  groupOrder.indexOf(changeGroup(a)) - groupOrder.indexOf(changeGroup(b)) ||
+  changedPins(b).length - changedPins(a).length ||
+  a.ref.localeCompare(b.ref, undefined, { numeric: true }) ||
+  a.file.localeCompare(b.file);
 function renderList() {
   const list = $("part-list");
   list.replaceChildren();
@@ -242,15 +298,7 @@ function renderList() {
         matches(p) &&
         (!$("only-changed").checked || p.status !== "unchanged"),
     )
-    .sort((a, b) => {
-      const order = ["Electrical", "Removed", "Added", "Metadata", "Unchanged"];
-      return (
-        order.indexOf(changeGroup(a)) - order.indexOf(changeGroup(b)) ||
-        changedPins(b).length - changedPins(a).length ||
-        a.ref.localeCompare(b.ref, undefined, { numeric: true }) ||
-        a.file.localeCompare(b.file)
-      );
-    });
+    .sort(reviewOrder);
   $("list-count").textContent = `${shown.length} shown`;
   let group;
   for (const p of shown) {
@@ -471,6 +519,15 @@ function buildMap(restore) {
   $("scope-count").title =
     `${shown.length} components across both revisions, including ${removed} removed in head`;
   $("map-empty").hidden = shown.length > 0;
+  const tally = {};
+  for (const p of shown) {
+    const kind = changeGroup(p).toLowerCase();
+    tally[kind] = (tally[kind] ?? 0) + 1;
+  }
+  for (const count of document.querySelectorAll(".legend [data-count]")) {
+    count.textContent = tally[count.dataset.count] ?? 0;
+    count.parentElement.classList.toggle("none", !tally[count.dataset.count]);
+  }
   const sheetItems = shown.map((p) => ({ p, weight: weight(p) }))
     .sort((a, b) => b.weight - a.weight);
   $("canvas").style.minHeight = "";
@@ -524,27 +581,28 @@ function buildMap(restore) {
       const node = el("div", undefined, "group");
       position(node, r, 3);
       const title = el("button", undefined, "group-title");
-      title.dataset.focusKey = `group:${group.key}`;
-      title.append(
-        el(
-          "span",
-          groupByBoard
-            ? shortFile(group.key)
-            : group.key === "/"
-              ? "Root sheet"
-              : group.key,
-        ),
-        el(
-          "small",
-          `${group.ps.length} ${group.ps.length === 1 ? "part" : "parts"}`,
-        ),
-      );
-      title.append(el("span", undefined, "chevron"));
-      title.title = groupByBoard
-        ? group.key
+      title.dataset.focusKey = groupKey(group.key);
+      const name = groupByBoard
+        ? shortFile(group.key)
         : group.key === "/"
           ? "Root sheet"
           : group.key;
+      const electrical = group.ps.filter(isElectrical).length;
+      title.append(el("span", name));
+      if (electrical) {
+        const count = el("small", undefined, "group-electrical");
+        count.append(el("i"), String(electrical));
+        title.append(count);
+      }
+      title.append(
+        el(
+          "small",
+          `${group.ps.length} ${group.ps.length === 1 ? "part" : "parts"}`,
+          "group-parts",
+        ),
+        el("span", undefined, "chevron"),
+      );
+      title.title = `${groupByBoard ? group.key : name}\n${electrical} electrical ${electrical === 1 ? "change" : "changes"} · ${group.ps.length} ${group.ps.length === 1 ? "part" : "parts"}`;
       title.setAttribute(
         "aria-label",
         `Open ${group.key === "/" ? "Root sheet" : group.key}`,
@@ -554,6 +612,12 @@ function buildMap(restore) {
           groupByBoard
             ? { file: group.key }
             : { file: group.ps[0].file, sheet: group.key },
+          {
+            x: node.offsetLeft,
+            y: node.offsetTop,
+            w: node.offsetWidth,
+            h: node.offsetHeight,
+          },
         );
       node.append(title);
       const inner = {
@@ -668,25 +732,34 @@ function highlight(id) {
     );
     return { x: a.x + dx * scale, y: a.y + dy * scale };
   };
+  // Each curve leaves and meets a tile square to the edge it crosses.
+  const normal = (from, to) =>
+    Math.abs(to.x - from.x) / from.w > Math.abs(to.y - from.y) / from.h
+      ? { x: Math.sign(to.x - from.x), y: 0 }
+      : { x: 0, y: Math.sign(to.y - from.y) };
   for (const edge of edges) {
     const ca = centers.get(edge.source),
       cb = centers.get(edge.target);
     const a = borderPoint(ca, cb),
       b = borderPoint(cb, ca);
-    const bend = Math.min(48, Math.abs(a.x - b.x) * 0.15);
-    const d = `M ${a.x} ${a.y} C ${a.x} ${(a.y + b.y) / 2 - bend}, ${b.x} ${(a.y + b.y) / 2 - bend}, ${b.x} ${b.y}`;
+    const out = normal(ca, cb),
+      back = normal(cb, ca),
+      pull = Math.max(10, Math.min(140, Math.hypot(b.x - a.x, b.y - a.y) * 0.45));
+    const d = `M ${a.x} ${a.y} C ${a.x + out.x * pull} ${a.y + out.y * pull}, ${b.x + back.x * pull} ${b.y + back.y * pull}, ${b.x} ${b.y}`;
     svg.append(
       svgEl("path", {
         d,
-        fill: "none",
-        stroke: "#6cb4ff",
-        "stroke-width": edges.length > 30 ? 0.65 : 1,
+        class: "link",
+        pathLength: 1,
+        "stroke-width": edges.length > 40 ? 0.9 : edges.length > 12 ? 1.2 : 1.5,
         opacity: Math.max(
-          0.12,
-          Math.min(0.45, 3 / Math.sqrt(edges.length || 1)),
+          0.3,
+          Math.min(0.85, 4.5 / Math.sqrt(edges.length || 1)),
         ),
       }),
     );
+    if (edges.length <= 40)
+      svg.append(svgEl("circle", { cx: b.x, cy: b.y, r: 2, class: "link-end" }));
   }
   const visible = result.ids.filter((id) => centers.has(id)).length;
   const title = `${p.ref} · ${result.ids.length} ${state.transitive ? `transitively reachable ${result.ids.length === 1 ? "part" : "parts"}` : `shared-net ${result.ids.length === 1 ? "neighbor" : "neighbors"}`}`;
@@ -741,6 +814,7 @@ function highlight(id) {
 
 function impact(title, text) {
   const box = $("impact");
+  delete box.dataset.idle;
   box.tabIndex = -1;
   box.scrollTop = 0;
   box.replaceChildren(el("span", undefined, "impact-dot"));
@@ -764,11 +838,60 @@ function resetImpact() {
   $("connections").replaceChildren();
   for (const tile of $("tiles").querySelectorAll(".tile"))
     tile.classList.remove("hovered", "affected", "dimmed");
-  if (!state.selected)
-    impact(
-      "Trace electrical reach",
-      "Hover or focus a component to highlight shared-net neighbors across both revisions. Tap to preview. Ground excluded by default.",
-    );
+  if (state.selected) return;
+  // An unchanged idle readout keeps its buttons, and their focus, in place.
+  const idle = JSON.stringify([state.scope, state.query]);
+  if ($("impact").dataset.idle === idle) return;
+  const body = impact(
+    "Trace electrical reach",
+    matchMedia("(pointer: coarse)").matches
+      ? "Tap a part to trace the parts that share a net with it. Tap again to inspect. Ground excluded."
+      : "Hover or focus a part to trace every part that shares a net with it in base or head. Click to inspect. Ground excluded by default.",
+  );
+  // The idle readout explains the marks a trace is about to draw.
+  const key = el("ul", undefined, "reach-key");
+  key.setAttribute("aria-label", "Trace key");
+  for (const [mark, label] of [
+    ["source", "Traced part"],
+    ["neighbor", "Shares a net"],
+    ["link", "Shared-net link"],
+    ["rest", "No shared net"],
+  ]) {
+    const item = el("li");
+    item.append(el("i", undefined, mark), label);
+    key.append(item);
+  }
+  body.append(key);
+  const leading = report.parts
+    .filter((p) => inScope(p) && matches(p) && isElectrical(p))
+    .sort(reviewOrder)
+    .slice(0, 3);
+  if (leading.length) {
+    const start = el("div", undefined, "reach-start");
+    start.setAttribute("role", "group");
+    start.setAttribute("aria-label", "Largest electrical changes in this view");
+    start.append(el("span", "Start with"));
+    for (const p of leading) {
+      const rewired = changedPins(p).length;
+      const open = el("button", undefined, `start-part ${p.status}`);
+      open.dataset.id = p.id;
+      open.append(
+        el("b", p.ref),
+        el(
+          "span",
+          rewired ? `${rewired} ${rewired === 1 ? "pin" : "pins"}` : p.status,
+        ),
+      );
+      open.setAttribute(
+        "aria-label",
+        `Inspect ${p.ref}, ${rewired ? `${rewired} pins rewired` : p.status}`,
+      );
+      open.onclick = () => openDiff(p, { region: "map", key: `part:${p.id}` });
+      start.append(open);
+    }
+    body.append(start);
+  }
+  $("impact").dataset.idle = idle;
 }
 function format(value) {
   if (value === undefined || value === null) return "∅";
@@ -1060,6 +1183,11 @@ function openDiff(p, origin) {
   }
   panel.scrollTop = 0;
   panel.style.setProperty("--diff-head", `${head.offsetHeight}px`);
+  if (!reducedMotion())
+    panel.animate([{ opacity: 0.3 }, { opacity: 1 }], {
+      duration: 140,
+      easing: "ease-out",
+    });
   inspectorImpact(p);
   close.focus({ preventScroll: true });
   if (matchMedia("(max-width: 700px)").matches)
@@ -1487,6 +1615,7 @@ async function init() {
           $(id).focus({ preventScroll: true });
         } else renderMap();
         resetImpact();
+        if (!reducedMotion()) zoom([{ opacity: 0.4 }, { opacity: 1 }]);
       };
     wireRoving($("part-list"), "list");
     wireRoving($("tiles"), "map");
